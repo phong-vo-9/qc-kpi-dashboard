@@ -7,12 +7,18 @@ import { computeAggregates, decorate } from './kpi.js'
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// Apply Project / Year / Quarter filters (year & quarter come from labels).
+// Apply global filters (ui.md §3): Project / Year / Quarter / Status +
+// Review / Test Case / Test Design level. Year & quarter come from labels.
+// review/tc/td accept a level "1" | "2" | "3" → require that level's flag.
 function applyFilters(tasks, q = {}) {
   return tasks.map(decorate).filter((t) => {
     if (q.project && t.project !== q.project) return false
     if (q.year && String(t.year) !== String(q.year)) return false
     if (q.quarter && t.quarter !== q.quarter) return false
+    if (q.status && t.status !== q.status) return false
+    if (q.review && !t[`review${q.review}`]) return false
+    if (q.tc && !t[`tc${q.tc}`]) return false
+    if (q.td && !t[`td${q.td}`]) return false
     return true
   })
 }
@@ -43,9 +49,13 @@ app.get('/api/filters', (req, res) => {
     projects: uniq(t.map((x) => x.project)).sort(),
     years: uniq(t.map((x) => x.year)).sort(),
     quarters: uniq(t.map((x) => x.quarter)).sort(),
+    statuses: uniq(t.map((x) => x.status)).sort(),
+    // Review / Test Case / Test Design levels are fixed 1–3.
+    levels: ['1', '2', '3'],
   })
 })
 
-app.get('/api/meta', (_req, res) => res.json({ lastRefresh: getMeta('lastRefresh') }))
+app.get('/api/meta', (_req, res) =>
+  res.json({ lastRefresh: getMeta('lastRefresh'), qcName: process.env.JIRA_QC_NAME || '' }))
 
 app.listen(PORT, () => console.log(`QC KPI API → http://localhost:${PORT}`))

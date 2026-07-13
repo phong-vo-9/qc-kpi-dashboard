@@ -7,7 +7,7 @@ Guidance for Claude Code (or any AI assistant) working in this repo. Read this b
 A **localhost, read-only** dashboard that pulls QC tasks from a self-hosted Jira Server and shows KPI stats. It never writes back to Jira. Full product spec: `docs/SPEC.md`. User-facing README (Vietnamese): `README.md`.
 
 - **Backend:** Node.js + Express + SQLite (`better-sqlite3`), ES modules, in `server/`
-- **Frontend:** React + Vite + TailwindCSS + Recharts, in `web/`
+- **Frontend:** React + Vite + TailwindCSS + Recharts, `lucide-react` icons, Inter font (`@fontsource/inter`), light/dark mode, in `web/`
 - **Monorepo:** npm workspaces. Root `npm install` installs both; root `npm run dev` runs both.
 - The browser **never** calls Jira directly — Vite proxies `/api/*` to Express (`web/vite.config.js`).
 
@@ -41,9 +41,12 @@ Jira REST v2 ──▶ server/jira.js (fetch + filter by Assigned QC)
 | `server/jira.js` | Jira REST v2 call, JQL, auth, field mapping (`normalize`). **Most Jira-specific tweaks go here.** |
 | `server/kpi.js` | `parseLabels` (label → KPI flags + quarter/year) and `computeAggregates` (all counts/ratios/top-5). **KPI rule changes go here.** |
 | `server/db.js` | SQLite schema + `saveTasks`/`getTasks`/meta. |
-| `server/index.js` | Routes + `applyFilters` (Project/Year/Quarter). |
+| `server/index.js` | Routes + `applyFilters` (Project/Year/Quarter/Status/Review/TC/TD). |
 | `server/env.js` | Loads root `.env` — imported FIRST in `index.js`. |
-| `web/src/App.jsx` | Entire UI (single file: cards, pies, bars, table, filters, Refresh). |
+| `web/src/App.jsx` | UI shell: header, 2 tabs (Tổng quan / Danh sách Task), global filters, data loading, dark-mode. |
+| `web/src/tabs/` | `Overview.jsx` (KPI cards, progress bars, QC Weight, Bug stats, charts) + `Tasks.jsx` (search, badge table, pagination). |
+| `web/src/components/` | Reusable UI (`ui.jsx`), themed Recharts wrappers (`charts.jsx`), `Header.jsx`, `Filters.jsx`. |
+| `web/src/lib/` | `api.js` (fetch + Jira URL), `tokens.js` (validated color palette, ui.md §18), `useDarkMode.js`. |
 
 ## Jira-specific config (the parts most likely to need adjusting)
 
