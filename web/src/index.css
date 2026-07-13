@@ -1,3 +1,19 @@
+/* Inter (self-hosted via @fontsource — works offline on the target PC).
+   @import must precede the @tailwind directives per CSS spec. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html { font-family: 'Inter', system-ui, sans-serif; }
+
+/* Smooth theme switch. */
+* { transition: background-color 0.2s ease, border-color 0.2s ease; }
+
+/* Recharts: keep focus outlines off the SVG sectors. */
+.recharts-wrapper:focus,
+.recharts-surface:focus { outline: none; }
