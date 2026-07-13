@@ -82,6 +82,17 @@ Mở trình duyệt vào **<http://localhost:5173>**, bấm nút **↻ Refresh**
 
 Dừng: nhấn `Ctrl + C` trong terminal.
 
+> ### ⚠️ Lần Refresh đầu tiên là bước kiểm tra quan trọng
+> Đây là lần duy nhất cần để ý, vì nó phụ thuộc vào cấu hình Jira thật (chỉ chạy được khi máy vào được mạng nội bộ có Jira).
+>
+> - **Báo lỗi `Jira 401`** → sai `JIRA_USER` / `JIRA_PASS` trong `.env`.
+> - **Refresh xong nhưng dashboard trống (Tổng Task = 0)** → thường do:
+>   - `JIRA_QC_NAME` trong `.env` không khớp **tên hiển thị** của QC trong Jira → sửa lại cho đúng.
+>   - Custom field ID khác với instance thật (`customfield_10503` = Assigned QC, `customfield_13212` = QC Weight) → sửa trong `server/jira.js`.
+> - **Chạy được, có dữ liệu** → xong, các lần sau chỉ cần bấm Refresh khi muốn cập nhật.
+>
+> Xem thêm bảng xử lý sự cố ở [mục 7](#7-xử-lý-sự-cố).
+
 ---
 
 ## 5. Cách hoạt động
