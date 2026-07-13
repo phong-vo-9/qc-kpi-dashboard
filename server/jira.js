@@ -80,11 +80,23 @@ export async function fetchTasks(projectOverride) {
     for (const issue of data.issues || []) {
       // Filter by Assigned QC (customfield_10503) in code — robust across Jira user-field formats.
       const qc = issue.fields?.customfield_10503
-      const qcName = qc?.displayName || qc?.name || ''
       if (e.qcName) {
-        if (!qcName) continue
-        if (!qcName.includes(e.qcName) && !e.qcName.includes(qcName)) continue
+        if (!qc) continue
+        const queryName = e.qcName.toLowerCase()
+        const qcDisplayName = (qc.displayName || '').toLowerCase()
+        const qcUsername = (qc.name || '').toLowerCase()
+        const qcEmail = (qc.emailAddress || '').toLowerCase()
+
+        const matches =
+          qcDisplayName.includes(queryName) ||
+          qcUsername.includes(queryName) ||
+          qcEmail.includes(queryName) ||
+          queryName.includes(qcDisplayName) ||
+          queryName.includes(qcUsername)
+
+        if (!matches) continue
       }
+
       out.push(normalize(issue))
     }
 
