@@ -6,6 +6,7 @@ const STATUSES = ['Todo', 'In Progress', 'Ready to Test', 'Testing', 'Done', 'Re
 const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
   'created', 'updated', 'duedate', 'subtasks', 'customfield_10503', 'customfield_13212',
+  'customfield_10107',
 ]
 
 function env() {
@@ -30,6 +31,21 @@ function buildJql(project) {
   return `project = "${project}" AND issuetype = Task AND status in (${statuses}) ORDER BY created DESC`
 }
 
+export function parseSprint(sprintFieldVal) {
+  if (!sprintFieldVal) return ''
+  const arr = Array.isArray(sprintFieldVal) ? sprintFieldVal : [sprintFieldVal]
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const s = arr[i]
+    if (typeof s === 'string') {
+      const match = /name=([^,\]]+)/.exec(s)
+      if (match) return match[1].trim()
+    } else if (s && typeof s === 'object' && s.name) {
+      return s.name
+    }
+  }
+  return ''
+}
+
 function normalize(issue) {
   const f = issue.fields || {}
   const qc = f.customfield_10503
@@ -48,6 +64,7 @@ function normalize(issue) {
     updated: f.updated || null,
     duedate: f.duedate || null,
     bugCount: (f.subtasks || []).length,
+    sprint: parseSprint(f.customfield_10107),
   }
 }
 

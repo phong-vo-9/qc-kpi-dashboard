@@ -75,6 +75,7 @@ export default function Tasks({ tasks }) {
                   <TH>Summary</TH>
                   <TH>Status</TH>
                   <TH>Quarter</TH>
+                  <TH>Sprint</TH>
                   <TH className="text-center">Review</TH>
                   <TH className="text-center">Test Case</TH>
                   <TH className="text-center">Test Design</TH>
@@ -96,6 +97,7 @@ export default function Tasks({ tasks }) {
                     <td className="py-2 px-3 max-w-xs truncate text-gray-700 dark:text-gray-200" title={t.summary}>{t.summary}</td>
                     <td className="py-2 px-3"><Badge className={statusStyle(t.status)}>{t.status || '—'}</Badge></td>
                     <td className="py-2 px-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{t.quarter || '—'}</td>
+                    <td className="py-2 px-3 text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[150px]" title={t.sprint}>{t.sprint || '—'}</td>
                     <td className="py-2 px-3"><Levels task={t} prefix="R" keys={['review1', 'review2', 'review3']} /></td>
                     <td className="py-2 px-3"><Levels task={t} prefix="TC" keys={['tc1', 'tc2', 'tc3']} /></td>
                     <td className="py-2 px-3"><Levels task={t} prefix="TD" keys={['td1', 'td2', 'td3']} /></td>

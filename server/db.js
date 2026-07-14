@@ -12,14 +12,21 @@ CREATE TABLE IF NOT EXISTS tasks (
   key TEXT PRIMARY KEY,
   summary TEXT, status TEXT, priority TEXT, assignee TEXT, assignedQC TEXT,
   qcWeight REAL, labels TEXT, project TEXT, component TEXT,
-  created TEXT, updated TEXT, duedate TEXT, bugCount INTEGER
+  created TEXT, updated TEXT, duedate TEXT, bugCount INTEGER,
+  sprint TEXT
 );
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 `)
 
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN sprint TEXT;')
+} catch (e) {
+  // Ignored if column already exists
+}
+
 const insert = db.prepare(`
-INSERT INTO tasks (key,summary,status,priority,assignee,assignedQC,qcWeight,labels,project,component,created,updated,duedate,bugCount)
-VALUES (@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@labels,@project,@component,@created,@updated,@duedate,@bugCount)
+INSERT INTO tasks (key,summary,status,priority,assignee,assignedQC,qcWeight,labels,project,component,created,updated,duedate,bugCount,sprint)
+VALUES (@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint)
 `)
 
 export function setMeta(k, v) {

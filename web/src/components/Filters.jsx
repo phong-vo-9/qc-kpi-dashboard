@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { SlidersHorizontal, RotateCcw } from 'lucide-react'
 
-const EMPTY = { project: '', year: '', quarter: '', status: '', review: '', tc: '', td: '' }
+const EMPTY = { project: '', sprint: '', year: '', quarter: '', status: '', review: '', tc: '', td: '' }
 
 function Field({ label, value, onChange, options, render = (o) => o }) {
   return (
@@ -32,8 +32,9 @@ export default function Filters({ options, applied, onApply }) {
       <div className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-600 dark:text-gray-300">
         <SlidersHorizontal size={15} /> Bộ lọc
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
         <Field label="Project" value={draft.project} onChange={set('project')} options={options.projects || []} />
+        <Field label="Sprint" value={draft.sprint} onChange={set('sprint')} options={options.sprints || []} />
         <Field label="Year" value={draft.year} onChange={set('year')} options={options.years || []} />
         <Field label="Quarter" value={draft.quarter} onChange={set('quarter')} options={options.quarters || []} />
         <Field label="Status" value={draft.status} onChange={set('status')} options={options.statuses || []} />

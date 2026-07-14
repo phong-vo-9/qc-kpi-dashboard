@@ -15,6 +15,7 @@ function applyFilters(tasks, q = {}) {
     if (q.project && t.project !== q.project) return false
     if (q.year && String(t.year) !== String(q.year)) return false
     if (q.quarter && t.quarter !== q.quarter) return false
+    if (q.sprint && t.sprint !== q.sprint) return false
     if (q.status && t.status !== q.status) return false
     if (q.review && !t[`review${q.review}`]) return false
     if (q.tc && !t[`tc${q.tc}`]) return false
@@ -49,6 +50,7 @@ app.get('/api/filters', (req, res) => {
     projects: uniq(t.map((x) => x.project)).sort(),
     years: uniq(t.map((x) => x.year)).sort(),
     quarters: uniq(t.map((x) => x.quarter)).sort(),
+    sprints: uniq(t.map((x) => x.sprint)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
     statuses: uniq(t.map((x) => x.status)).sort(),
     // Review / Test Case / Test Design levels are fixed 1–3.
     levels: ['1', '2', '3'],

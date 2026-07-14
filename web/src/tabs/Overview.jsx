@@ -12,6 +12,7 @@ export default function Overview({ kpi, mode }) {
   const { review, testCase, testDesign, ratios, averages, qcWeight, bug, status } = kpi
   const released = status.counts['Released'] || 0
   const done = status.counts['Done'] || 0
+  const hasSprints = qcWeight.bySprint && qcWeight.bySprint.length > 0
 
   const reviewPie = [
     { name: 'Review 1', value: review.r1 }, { name: 'Review 2', value: review.r2 }, { name: 'Review 3', value: review.r3 },
@@ -80,11 +81,17 @@ export default function Overview({ kpi, mode }) {
           <Stat label="Highest" value={qcWeight.highest} />
           <Stat label="Lowest" value={qcWeight.lowest} />
         </div>
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className={`grid gap-6 ${hasSprints ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
           <div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QC Weight theo Quarter</div>
             <BarCard data={qcWeight.byQuarter} dataKey="weight" xKey="quarter" color={e.qc} mode={mode} height={220} showLabels />
           </div>
+          {hasSprints && (
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QC Weight theo Sprint</div>
+              <BarCard data={qcWeight.bySprint} dataKey="weight" xKey="sprint" color={e.qc} mode={mode} height={220} showLabels />
+            </div>
+          )}
           <div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Top 5 Task theo QC Weight</div>
             <BarCard data={qcWeight.top5} dataKey="weight" xKey="key" color={e.qc} mode={mode} height={220} horizontal />
@@ -103,7 +110,7 @@ export default function Overview({ kpi, mode }) {
           <Stat label="Bug / Task" value={bug.perTask} />
           <Stat label="Nhiều nhất" value={bug.highest} />
         </div>
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className={`grid gap-6 ${hasSprints ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           <div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bug Distribution</div>
             <PieCard data={bug.distribution} colors={ramp(mode, 'bug', 4)} mode={mode} height={220} centerCaption="Task" />
@@ -112,6 +119,12 @@ export default function Overview({ kpi, mode }) {
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bug theo Quarter</div>
             <BarCard data={bug.byQuarter} dataKey="bug" xKey="quarter" color={e.bug} mode={mode} height={220} showLabels />
           </div>
+          {hasSprints && (
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bug theo Sprint</div>
+              <BarCard data={bug.bySprint} dataKey="bug" xKey="sprint" color={e.bug} mode={mode} height={220} showLabels />
+            </div>
+          )}
           <div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Top 5 Task nhiều Bug</div>
             <BarCard data={bug.top5} dataKey="bug" xKey="key" color={e.bug} mode={mode} height={220} horizontal />
@@ -126,9 +139,20 @@ export default function Overview({ kpi, mode }) {
         <Panel title="Test Design (cấp độ)"><PieCard data={tdPie} colors={ramp(mode, 'td')} mode={mode} /></Panel>
       </div>
 
-      <Panel title="Task theo Quarter">
-        <LineCard data={kpi.taskByQuarter} series={[{ key: 'task', name: 'Task', color: e.task }]} xKey="quarter" mode={mode} />
-      </Panel>
+      {hasSprints ? (
+        <div className="grid md:grid-cols-2 gap-4">
+          <Panel title="Task theo Quarter">
+            <LineCard data={kpi.taskByQuarter} series={[{ key: 'task', name: 'Task', color: e.task }]} xKey="quarter" mode={mode} />
+          </Panel>
+          <Panel title="Task theo Sprint">
+            <LineCard data={kpi.taskBySprint} series={[{ key: 'task', name: 'Task', color: e.task }]} xKey="sprint" mode={mode} />
+          </Panel>
+        </div>
+      ) : (
+        <Panel title="Task theo Quarter">
+          <LineCard data={kpi.taskByQuarter} series={[{ key: 'task', name: 'Task', color: e.task }]} xKey="quarter" mode={mode} />
+        </Panel>
+      )}
     </div>
   )
 }

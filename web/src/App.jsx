@@ -32,7 +32,7 @@ export default function App() {
   const { isDark, toggle, theme } = useDarkMode()
   const [tab, setTab] = useState('overview')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [options, setOptions] = useState({ projects: [], years: [], quarters: [], statuses: [] })
+  const [options, setOptions] = useState({ projects: [], sprints: [], years: [], quarters: [], statuses: [] })
   const [kpi, setKpi] = useState(null)
   const [tasks, setTasks] = useState([])
   const [meta, setMeta] = useState({})

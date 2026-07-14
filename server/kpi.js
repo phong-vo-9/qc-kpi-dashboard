@@ -67,6 +67,19 @@ export function computeAggregates(tasks) {
   }
   const quarters = ['Q1', 'Q2', 'Q3', 'Q4']
 
+  // QC Weight and Bug aggregated per Sprint.
+  const qwBySprint = {}
+  const bugBySprint = {}
+  const taskBySprint = {}
+  for (const x of t) {
+    if (!x.sprint) continue
+    qwBySprint[x.sprint] = (qwBySprint[x.sprint] || 0) + (x.qcWeight || 0)
+    bugBySprint[x.sprint] = (bugBySprint[x.sprint] || 0) + (x.bugCount || 0)
+    taskBySprint[x.sprint] = (taskBySprint[x.sprint] || 0) + 1
+  }
+  const sprints = [...new Set(t.map((x) => x.sprint).filter(Boolean))]
+  const sortedSprints = sprints.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+
   // QC Weight per Status (ui.md §6).
   const qwByStatus = {}
   const statusCounts = {}
@@ -114,6 +127,7 @@ export function computeAggregates(tasks) {
       highest: weights.length ? Math.max(...weights) : 0,
       lowest: weights.length ? Math.min(...weights) : 0,
       byQuarter: quarters.map((q) => ({ quarter: q, weight: qwByQuarter[q] || 0 })),
+      bySprint: sortedSprints.map((s) => ({ sprint: s, weight: qwBySprint[s] || 0 })),
       byStatus: seenStatuses.map((s) => ({ status: s, weight: qwByStatus[s] || 0 })),
       top5: [...t].sort((a, b) => b.qcWeight - a.qcWeight).slice(0, 5).map((x) => ({ key: x.key, weight: x.qcWeight })),
     },
@@ -123,11 +137,14 @@ export function computeAggregates(tasks) {
       average: ratio(totalBug), // alias — Average Bug per task
       highest: t.length ? Math.max(...t.map((x) => x.bugCount || 0)) : 0,
       byQuarter: quarters.map((q) => ({ quarter: q, bug: bugByQuarter[q] || 0 })),
+      bySprint: sortedSprints.map((s) => ({ sprint: s, bug: bugBySprint[s] || 0 })),
       distribution: BUG_BANDS.map((b) => ({ name: b, value: bandCounts[b] || 0 })),
       top5: [...t].sort((a, b) => b.bugCount - a.bugCount).slice(0, 5).map((x) => ({ key: x.key, bug: x.bugCount })),
     },
     // Task volume per quarter (ui.md §8 line chart).
     taskByQuarter: quarters.map((q) => ({ quarter: q, task: taskByQuarter[q] || 0 })),
+    // Task volume per sprint.
+    taskBySprint: sortedSprints.map((s) => ({ sprint: s, task: taskBySprint[s] || 0 })),
 
     // ── Back-compat aliases (kept so older callers/tests don't break) ──
     totalBug,
