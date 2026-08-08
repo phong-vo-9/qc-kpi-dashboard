@@ -13,20 +13,20 @@ CREATE TABLE IF NOT EXISTS tasks (
   summary TEXT, status TEXT, priority TEXT, assignee TEXT, assignedQC TEXT,
   qcWeight REAL, labels TEXT, project TEXT, component TEXT,
   created TEXT, updated TEXT, duedate TEXT, bugCount INTEGER,
-  sprint TEXT
+  sprint TEXT, type TEXT, enddate TEXT, reporter TEXT, linkedTask TEXT
 );
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 `)
 
-try {
-  db.exec('ALTER TABLE tasks ADD COLUMN sprint TEXT;')
-} catch (e) {
-  // Ignored if column already exists
-}
+try { db.exec('ALTER TABLE tasks ADD COLUMN sprint TEXT;'); } catch (e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN type TEXT;'); } catch (e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN enddate TEXT;'); } catch (e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN reporter TEXT;'); } catch (e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN linkedTask TEXT;'); } catch (e) {}
 
 const insert = db.prepare(`
-INSERT INTO tasks (key,summary,status,priority,assignee,assignedQC,qcWeight,labels,project,component,created,updated,duedate,bugCount,sprint)
-VALUES (@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint)
+INSERT INTO tasks (key,summary,status,priority,assignee,assignedQC,qcWeight,labels,project,component,created,updated,duedate,bugCount,sprint,type,enddate,reporter,linkedTask)
+VALUES (@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint,@type,@enddate,@reporter,@linkedTask)
 `)
 
 export function setMeta(k, v) {
@@ -38,10 +38,23 @@ export function getMeta(k) {
 }
 
 // Replace the cache with the freshly fetched set (drops stale tasks too).
-export function saveTasks(tasks) {
+export function saveTasks(tasks, projectFilter) {
   const tx = db.transaction((rows) => {
-    db.prepare('DELETE FROM tasks').run()
-    for (const r of rows) insert.run({ ...r, labels: JSON.stringify(r.labels || []) })
+    if (projectFilter) {
+      db.prepare('DELETE FROM tasks WHERE project = ?').run(projectFilter)
+    } else {
+      db.prepare('DELETE FROM tasks').run()
+    }
+    for (const r of rows) {
+      insert.run({
+        ...r,
+        labels: JSON.stringify(r.labels || []),
+        type: r.type || 'Task',
+        enddate: r.enddate || null,
+        reporter: r.reporter || '',
+        linkedTask: r.linkedTask || ''
+      })
+    }
   })
   tx(tasks)
   setMeta('lastRefresh', new Date().toISOString())

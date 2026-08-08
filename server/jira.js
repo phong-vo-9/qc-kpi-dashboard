@@ -6,7 +6,7 @@ const STATUSES = ['Todo', 'In Progress', 'Ready to Test', 'Testing', 'Done', 'Re
 const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
   'created', 'updated', 'duedate', 'subtasks', 'customfield_10503', 'customfield_13212',
-  'customfield_10107',
+  'customfield_10107', 'issuetype', 'reporter', 'issuelinks', 'customfield_11204',
 ]
 
 function env() {
@@ -28,7 +28,7 @@ function authHeader(e) {
 
 function buildJql(project) {
   const statuses = STATUSES.map((s) => `"${s}"`).join(', ')
-  return `project = "${project}" AND issuetype = Task AND status in (${statuses}) ORDER BY created DESC`
+  return `project = "${project}" AND issuetype in (Task, Bug) AND status in (${statuses}) ORDER BY created DESC`
 }
 
 export function parseSprint(sprintFieldVal) {
@@ -49,6 +49,8 @@ export function parseSprint(sprintFieldVal) {
 function normalize(issue) {
   const f = issue.fields || {}
   const qc = f.customfield_10503
+  const links = f.issuelinks || []
+  const linkedTask = links.map((l) => (l.inwardIssue || l.outwardIssue)?.key).filter(Boolean)[0] || ''
   return {
     key: issue.key,
     summary: f.summary || '',
@@ -65,6 +67,10 @@ function normalize(issue) {
     duedate: f.duedate || null,
     bugCount: (f.subtasks || []).length,
     sprint: parseSprint(f.customfield_10107),
+    type: f.issuetype?.name || 'Task',
+    enddate: f.customfield_11204 || null,
+    reporter: f.reporter?.displayName || '',
+    linkedTask,
   }
 }
 
@@ -96,20 +102,40 @@ export async function fetchTasks(projectOverride) {
 
     for (const issue of data.issues || []) {
       // Filter by Assigned QC (customfield_10503) in code — robust across Jira user-field formats.
+      // Fallback to assignee if assignedQC field is not set (some older sprints).
       const qc = issue.fields?.customfield_10503
       if (e.qcName) {
-        if (!qc) continue
         const queryName = e.qcName.toLowerCase()
-        const qcDisplayName = (qc.displayName || '').toLowerCase()
-        const qcUsername = (qc.name || '').toLowerCase()
-        const qcEmail = (qc.emailAddress || '').toLowerCase()
 
-        const matches =
-          qcDisplayName.includes(queryName) ||
-          qcUsername.includes(queryName) ||
-          qcEmail.includes(queryName) ||
-          queryName.includes(qcDisplayName) ||
-          queryName.includes(qcUsername)
+        // Try customfield_10503 (AssignedQC) first
+        let matches = false
+        if (qc) {
+          const qcDisplayName = (qc.displayName || '').toLowerCase()
+          const qcUsername = (qc.name || '').toLowerCase()
+          const qcEmail = (qc.emailAddress || '').toLowerCase()
+          matches =
+            qcDisplayName.includes(queryName) ||
+            qcUsername.includes(queryName) ||
+            qcEmail.includes(queryName) ||
+            queryName.includes(qcDisplayName) ||
+            queryName.includes(qcUsername)
+        }
+
+        // Fallback: also accept if assignee matches (covers older sprints where QC field may be empty)
+        if (!matches) {
+          const assignee = issue.fields?.assignee
+          if (assignee) {
+            const aDisplay = (assignee.displayName || '').toLowerCase()
+            const aName = (assignee.name || '').toLowerCase()
+            const aEmail = (assignee.emailAddress || '').toLowerCase()
+            matches =
+              aDisplay.includes(queryName) ||
+              aName.includes(queryName) ||
+              aEmail.includes(queryName) ||
+              queryName.includes(aDisplay) ||
+              queryName.includes(aName)
+          }
+        }
 
         if (!matches) continue
       }

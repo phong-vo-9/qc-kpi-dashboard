@@ -1,13 +1,65 @@
 // Tab 1 — Tổng quan (ui.md §4–8): KPI cards, progress bars, QC Weight,
 // Bug statistics, charts.
+import { useState } from 'react'
 import {
   ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
+  AlertTriangle, CalendarOff, ExternalLink
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
 import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
 import { ENTITY, ramp, statusStyle } from '../lib/tokens.js'
+import { jiraUrl } from '../lib/api.js'
 
-export default function Overview({ kpi, mode }) {
+function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClass }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="p-4 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${colorClass}`}>
+            <Icon size={18} />
+          </span>
+          <span className="font-medium text-sm text-gray-700 dark:text-gray-200">{title}</span>
+        </div>
+        <div className="text-2xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">{count}</div>
+      </div>
+      {count > 0 && (
+        <div className="mt-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {expanded ? 'Ẩn danh sách' : 'Xem danh sách'}
+          </button>
+          {expanded && (
+            <ul className="mt-2 max-h-40 overflow-y-auto space-y-1.5 divide-y divide-gray-100 dark:divide-neutral-800 text-xs">
+              {tasks.map((t) => (
+                <li key={t.key} className="pt-1.5 first:pt-0 flex items-center justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400 truncate max-w-[200px] sm:max-w-md" title={t.summary}>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{t.key}</span>: {t.summary}
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => onNavigate(t.key)}
+                      className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 font-medium"
+                    >
+                      Xem
+                    </button>
+                    <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Overview({ kpi, mode, tasks = [], onNavigateToTask }) {
   const e = ENTITY[mode]
   const { review, testCase, testDesign, ratios, averages, qcWeight, bug, status } = kpi
   const released = status.counts['Released'] || 0
@@ -24,8 +76,34 @@ export default function Overview({ kpi, mode }) {
     { name: 'TD 1', value: testDesign.td1 }, { name: 'TD 2', value: testDesign.td2 }, { name: 'TD 3', value: testDesign.td3 },
   ]
 
+  // Calculate missing and overdue due dates for tasks (excluding Bugs)
+  const taskIssues = tasks.filter((x) => x.type === 'Task')
+  const todayStr = new Date().toISOString().split('T')[0]
+  const missingDue = taskIssues.filter((x) => !x.duedate)
+  const overdueDue = taskIssues.filter((x) => x.duedate && x.duedate < todayStr && x.status !== 'Done' && x.status !== 'Released')
+
   return (
     <div className="space-y-6">
+      {/* Báo cáo trễ hạn */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <LateReportCard
+          title="Thiếu Due date"
+          icon={CalendarOff}
+          count={missingDue.length}
+          tasks={missingDue}
+          onNavigate={onNavigateToTask}
+          colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"
+        />
+        <LateReportCard
+          title="Trễ Due date"
+          icon={AlertTriangle}
+          count={overdueDue.length}
+          tasks={overdueDue}
+          onNavigate={onNavigateToTask}
+          colorClass="bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400"
+        />
+      </div>
+
       {/* KPI cards (§4) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <KpiCard icon={ClipboardList} entity="task" label="Total Task" value={kpi.total}
