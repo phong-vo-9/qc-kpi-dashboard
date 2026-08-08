@@ -12,7 +12,7 @@ import { useDarkMode } from './lib/useDarkMode.js'
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
-  { id: 'bugs', label: '📋 Danh sách Bug', icon: Bug },
+  { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
 ]
 
 function LoadingSkeleton() {
@@ -111,11 +111,10 @@ export default function App() {
             return (
               <button
                 key={t.id} onClick={() => setTab(t.id)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  active
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${active
                     ? 'bg-white dark:bg-neutral-800 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                }`}
+                  }`}
               >
                 <Icon size={16} /> {t.label}
               </button>

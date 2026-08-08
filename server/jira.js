@@ -28,7 +28,7 @@ function authHeader(e) {
 
 function buildJql(project) {
   const statuses = STATUSES.map((s) => `"${s}"`).join(', ')
-  return `project = "${project}" AND issuetype in (Task, Bug) AND status in (${statuses}) ORDER BY created DESC`
+  return `project = "${project}" AND issuetype in (Task, Bug, Support) AND status in (${statuses}) ORDER BY created DESC`
 }
 
 export function parseSprint(sprintFieldVal) {

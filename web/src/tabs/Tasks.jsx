@@ -42,7 +42,8 @@ export default function Tasks({ tasks, highlightKey }) {
   const [sortDirection, setSortDirection] = useState('asc')
 
   const taskIssues = useMemo(() => {
-    return tasks.filter((t) => t.type === 'Task' || !t.type)
+    // Show Task and Support types; Bug goes to the Bugs tab
+    return tasks.filter((t) => t.type !== 'Bug')
   }, [tasks])
 
   const filtered = useMemo(() => {
@@ -201,6 +202,7 @@ export default function Tasks({ tasks, highlightKey }) {
                 <tr className="text-left border-b border-gray-100 dark:border-neutral-800">
                   <SortableTH field="key">Task</SortableTH>
                   <TH>Summary</TH>
+                  <SortableTH field="type">Type</SortableTH>
                   <SortableTH field="status">Status</SortableTH>
                   <TH>Q</TH>
                   <TH>Sprint</TH>
@@ -239,6 +241,12 @@ export default function Tasks({ tasks, highlightKey }) {
                       <td className="py-2 px-2 max-w-[200px] truncate text-gray-700 dark:text-gray-200 text-xs" title={t.summary}>
                         {isGoal && <Star size={11} className="inline mr-1 fill-amber-400 text-amber-400 flex-shrink-0" />}
                         {t.summary}
+                      </td>
+                      <td className="py-2 px-2 whitespace-nowrap">
+                        {t.type === 'Support'
+                          ? <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300 border border-purple-100 dark:border-purple-500/20">Support</span>
+                          : <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 border border-sky-100 dark:border-sky-500/20">Task</span>
+                        }
                       </td>
                       <td className="py-2 px-2"><Badge className={statusStyle(t.status)}>{t.status || '—'}</Badge></td>
                       <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">{t.quarter || '—'}</td>

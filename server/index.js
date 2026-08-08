@@ -83,7 +83,7 @@ app.get('/api/filters', (req, res) => {
     sprints: uniq(t.map((x) => x.sprint)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
     statuses: uniq(t.map((x) => x.status)).sort(),
     labels: FIXED_LABELS,
-    types: ['Task', 'Bug'],
+    types: ['Task', 'Bug', 'Support'],
     // Review / Test Case / Test Design levels are fixed 1–3.
     levels: ['1', '2', '3'],
   })
