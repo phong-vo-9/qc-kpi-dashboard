@@ -101,39 +101,30 @@ export async function fetchTasks(projectOverride) {
     const data = await res.json()
 
     for (const issue of data.issues || []) {
-      // Filter by Assigned QC (customfield_10503) in code — robust across Jira user-field formats.
-      // Fallback to assignee if assignedQC field is not set (some older sprints).
+      // Filter strictly by Assigned QC (customfield_10503) only.
+      // We do NOT fall back to assignee — that field represents who does the work,
+      // not who did QC. Falling back caused tasks like AW-177 (where the developer
+      // happened to share the QC's name as assignee) to appear incorrectly.
       const qc = issue.fields?.customfield_10503
       if (e.qcName) {
         const queryName = e.qcName.toLowerCase()
-
-        // Try customfield_10503 (AssignedQC) first
         let matches = false
-        if (qc) {
-          const qcDisplayName = (qc.displayName || '').toLowerCase()
-          const qcUsername = (qc.name || '').toLowerCase()
-          const qcEmail = (qc.emailAddress || '').toLowerCase()
-          matches =
-            qcDisplayName.includes(queryName) ||
-            qcUsername.includes(queryName) ||
-            qcEmail.includes(queryName) ||
-            queryName.includes(qcDisplayName) ||
-            queryName.includes(qcUsername)
-        }
 
-        // Fallback: also accept if assignee matches (covers older sprints where QC field may be empty)
-        if (!matches) {
-          const assignee = issue.fields?.assignee
-          if (assignee) {
-            const aDisplay = (assignee.displayName || '').toLowerCase()
-            const aName = (assignee.name || '').toLowerCase()
-            const aEmail = (assignee.emailAddress || '').toLowerCase()
+        if (qc) {
+          if (typeof qc === 'string') {
+            // Some Jira Server instances return the field as a plain email string
+            matches = qc.toLowerCase().includes(queryName) || queryName.includes(qc.toLowerCase())
+          } else if (typeof qc === 'object') {
+            // Normal user object: {displayName, name, emailAddress}
+            const qcDisplayName = (qc.displayName || '').toLowerCase()
+            const qcUsername = (qc.name || '').toLowerCase()
+            const qcEmail = (qc.emailAddress || '').toLowerCase()
             matches =
-              aDisplay.includes(queryName) ||
-              aName.includes(queryName) ||
-              aEmail.includes(queryName) ||
-              queryName.includes(aDisplay) ||
-              queryName.includes(aName)
+              qcDisplayName.includes(queryName) ||
+              qcUsername.includes(queryName) ||
+              qcEmail.includes(queryName) ||
+              queryName.includes(qcDisplayName) ||
+              queryName.includes(qcUsername)
           }
         }
 
