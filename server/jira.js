@@ -6,7 +6,7 @@ const STATUSES = ['Todo', 'In Progress', 'Ready to Test', 'Testing', 'Done', 'Re
 const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
   'created', 'updated', 'duedate', 'subtasks', 'customfield_10503', 'customfield_13212',
-  'customfield_10107',
+  'customfield_10107', 'issuetype', 'reporter', 'issuelinks', 'customfield_11204',
 ]
 
 function env() {
@@ -28,7 +28,7 @@ function authHeader(e) {
 
 function buildJql(project) {
   const statuses = STATUSES.map((s) => `"${s}"`).join(', ')
-  return `project = "${project}" AND issuetype = Task AND status in (${statuses}) ORDER BY created DESC`
+  return `project = "${project}" AND issuetype in (Task, Bug, Support) AND status in (${statuses}) ORDER BY created DESC`
 }
 
 export function parseSprint(sprintFieldVal) {
@@ -49,6 +49,8 @@ export function parseSprint(sprintFieldVal) {
 function normalize(issue) {
   const f = issue.fields || {}
   const qc = f.customfield_10503
+  const links = f.issuelinks || []
+  const linkedTask = links.map((l) => (l.inwardIssue || l.outwardIssue)?.key).filter(Boolean)[0] || ''
   return {
     key: issue.key,
     summary: f.summary || '',
@@ -65,6 +67,10 @@ function normalize(issue) {
     duedate: f.duedate || null,
     bugCount: (f.subtasks || []).length,
     sprint: parseSprint(f.customfield_10107),
+    type: f.issuetype?.name || 'Task',
+    enddate: f.customfield_11204 || null,
+    reporter: f.reporter?.displayName || '',
+    linkedTask,
   }
 }
 
@@ -95,21 +101,32 @@ export async function fetchTasks(projectOverride) {
     const data = await res.json()
 
     for (const issue of data.issues || []) {
-      // Filter by Assigned QC (customfield_10503) in code — robust across Jira user-field formats.
+      // Filter strictly by Assigned QC (customfield_10503) only.
+      // We do NOT fall back to assignee — that field represents who does the work,
+      // not who did QC. Falling back caused tasks like AW-177 (where the developer
+      // happened to share the QC's name as assignee) to appear incorrectly.
       const qc = issue.fields?.customfield_10503
       if (e.qcName) {
-        if (!qc) continue
         const queryName = e.qcName.toLowerCase()
-        const qcDisplayName = (qc.displayName || '').toLowerCase()
-        const qcUsername = (qc.name || '').toLowerCase()
-        const qcEmail = (qc.emailAddress || '').toLowerCase()
+        let matches = false
 
-        const matches =
-          qcDisplayName.includes(queryName) ||
-          qcUsername.includes(queryName) ||
-          qcEmail.includes(queryName) ||
-          queryName.includes(qcDisplayName) ||
-          queryName.includes(qcUsername)
+        if (qc) {
+          if (typeof qc === 'string') {
+            // Some Jira Server instances return the field as a plain email string
+            matches = qc.toLowerCase().includes(queryName) || queryName.includes(qc.toLowerCase())
+          } else if (typeof qc === 'object') {
+            // Normal user object: {displayName, name, emailAddress}
+            const qcDisplayName = (qc.displayName || '').toLowerCase()
+            const qcUsername = (qc.name || '').toLowerCase()
+            const qcEmail = (qc.emailAddress || '').toLowerCase()
+            matches =
+              qcDisplayName.includes(queryName) ||
+              qcUsername.includes(queryName) ||
+              qcEmail.includes(queryName) ||
+              queryName.includes(qcDisplayName) ||
+              queryName.includes(qcUsername)
+          }
+        }
 
         if (!matches) continue
       }

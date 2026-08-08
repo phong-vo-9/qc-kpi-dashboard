@@ -1,16 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
-import { LayoutDashboard, Table2 } from 'lucide-react'
+import { LayoutDashboard, Table2, Bug } from 'lucide-react'
 import Header from './components/Header.jsx'
 import Filters, { EMPTY_FILTERS } from './components/Filters.jsx'
 import { Skeleton } from './components/ui.jsx'
 import Overview from './tabs/Overview.jsx'
 import Tasks from './tabs/Tasks.jsx'
+import Bugs from './tabs/Bugs.jsx'
 import { api, query } from './lib/api.js'
 import { useDarkMode } from './lib/useDarkMode.js'
 
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
+  { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
 ]
 
 function LoadingSkeleton() {
@@ -32,19 +34,43 @@ export default function App() {
   const { isDark, toggle, theme } = useDarkMode()
   const [tab, setTab] = useState('overview')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [options, setOptions] = useState({ projects: [], sprints: [], years: [], quarters: [], statuses: [] })
+  const [options, setOptions] = useState({ projects: [], sprints: [], years: [], quarters: [], statuses: [], types: [], labels: [] })
   const [kpi, setKpi] = useState(null)
   const [tasks, setTasks] = useState([])
   const [meta, setMeta] = useState({})
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
+  const [highlightKey, setHighlightKey] = useState(null)
 
   const load = useCallback(async () => {
     const q = query(filters)
+    // For /api/tasks we strip `type` so both tabs (Tasks + Bugs) get their own data
+    const { type: _type, ...filtersWithoutType } = filters
+    const qNoType = query(filtersWithoutType)
+    const filterQ = filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''
     const [k, t, o, m] = await Promise.all([
-      api(`/api/kpi?${q}`), api(`/api/tasks?${q}`), api('/api/filters'), api('/api/meta'),
+      api(`/api/kpi?${q}`), api(`/api/tasks?${qNoType}`), api(`/api/filters${filterQ}`), api('/api/meta'),
     ])
     setKpi(k); setTasks(t); setOptions(o); setMeta(m)
   }, [filters])
+
+  const handleNavigateToTask = (key) => {
+    const issue = tasks.find((x) => x.key === key)
+    if (issue) {
+      if (issue.type === 'Bug') {
+        setTab('bugs')
+      } else {
+        setTab('tasks')
+      }
+      setHighlightKey(key)
+      setTimeout(() => {
+        const el = document.getElementById(`task-${key}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 300)
+      setTimeout(() => setHighlightKey(null), 4000)
+    }
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -85,11 +111,10 @@ export default function App() {
             return (
               <button
                 key={t.id} onClick={() => setTab(t.id)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  active
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${active
                     ? 'bg-white dark:bg-neutral-800 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                }`}
+                  }`}
               >
                 <Icon size={16} /> {t.label}
               </button>
@@ -104,9 +129,11 @@ export default function App() {
         {!kpi ? (
           <LoadingSkeleton />
         ) : tab === 'overview' ? (
-          <div key={theme}><Overview kpi={kpi} mode={mode} /></div>
+          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} /></div>
+        ) : tab === 'tasks' ? (
+          <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : (
-          <Tasks tasks={tasks} />
+          <Bugs tasks={tasks} highlightKey={highlightKey} />
         )}
       </main>
     </div>
