@@ -41,6 +41,12 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
   const [highlightKey, setHighlightKey] = useState(null)
 
+  const loadFilterOptions = useCallback(async (project = '') => {
+    const filterQ = project ? `?project=${encodeURIComponent(project)}` : ''
+    const nextOptions = await api(`/api/filters${filterQ}`)
+    setOptions(nextOptions)
+  }, [])
+
   const load = useCallback(async () => {
     const q = query(filters)
     // For /api/tasks we strip `type` so both tabs (Tasks + Bugs) get their own data
@@ -123,7 +129,7 @@ export default function App() {
         </div>
 
         {/* Global filters (§3) */}
-        <Filters options={options} applied={filters} onApply={setFilters} />
+        <Filters options={options} applied={filters} onApply={setFilters} onProjectChange={loadFilterOptions} />
 
         {/* Tab content */}
         {!kpi ? (

@@ -78,17 +78,24 @@ function MultiSelect({ label, value, onChange, options }) {
   )
 }
 
-export default function Filters({ options, applied, onApply }) {
+export default function Filters({ options, applied, onApply, onProjectChange }) {
   const [draft, setDraft] = useState(applied)
   useEffect(() => setDraft(applied), [applied])
 
   const set = (k) => (e) => {
     const newVal = e.target.value
+    if (k === 'project') onProjectChange?.(newVal)
     setDraft((d) => {
       const next = { ...d, [k]: newVal }
       if (k === 'project') next.sprint = ''
       return next
     })
+  }
+
+  const reset = () => {
+    setDraft(EMPTY)
+    onProjectChange?.('')
+    onApply(EMPTY)
   }
 
   const levels = ['1', '2', '3']
@@ -113,7 +120,7 @@ export default function Filters({ options, applied, onApply }) {
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <button
-          onClick={() => onApply(EMPTY)}
+          onClick={reset}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
         >
           <RotateCcw size={14} /> Reset
