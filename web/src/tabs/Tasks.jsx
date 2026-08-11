@@ -20,7 +20,7 @@ function Levels({ task, prefix, keys }) {
   return (
     <div className="flex gap-1 justify-center">
       {on.map((n) => (
-        <span key={n} className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
+        <span key={n} className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
           {prefix}{n}
         </span>
       ))}
@@ -29,7 +29,7 @@ function Levels({ task, prefix, keys }) {
 }
 
 const TH = ({ children, className = '' }) => (
-  <th className={`py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs ${className}`}>{children}</th>
+  <th className={`py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap text-[13.5px] ${className}`}>{children}</th>
 )
 
 const PAGE_SIZES = [10, 20, 50, 100]
@@ -124,7 +124,7 @@ export default function Tasks({ tasks, highlightKey }) {
     return (
       <th
         onClick={() => handleSort(field)}
-        className={`py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors select-none text-xs ${className}`}
+        className={`py-2 px-2 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors select-none text-[13.5px] ${className}`}
       >
         <div className="flex items-center gap-0.5">
           {children}
@@ -143,27 +143,27 @@ export default function Tasks({ tasks, highlightKey }) {
         {labels.map((lbl) => {
           if (lbl.toLowerCase() === 'sprintgoal') {
             return (
-              <span key={lbl} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/35">
+              <span key={lbl} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[13.5px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/35">
                 <Star size={10} className="fill-amber-500 text-amber-500" /> SprintGoal
               </span>
             )
           }
           if (lbl.toLowerCase() === 'regression test') {
             return (
-              <span key={lbl} className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300 border border-teal-100 dark:border-teal-500/20">
+              <span key={lbl} className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300 border border-teal-100 dark:border-teal-500/20">
                 Regression test
               </span>
             )
           }
           if (lbl.toLowerCase() === 'đột xuất') {
             return (
-              <span key={lbl} className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 border border-rose-100 dark:border-rose-500/20">
+              <span key={lbl} className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 border border-rose-100 dark:border-rose-500/20">
                 Đột xuất
               </span>
             )
           }
           return (
-            <span key={lbl} className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
+            <span key={lbl} className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
               {lbl}
             </span>
           )
@@ -238,24 +238,24 @@ export default function Tasks({ tasks, highlightKey }) {
                     >
                       <td className="py-2 px-2">
                         <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap text-xs">
+                          className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap text-[13.5px]">
                           {t.key} <ExternalLink size={11} />
                         </a>
                       </td>
-                      <td className="py-2 px-2 max-w-[200px] truncate text-gray-700 dark:text-gray-200 text-xs" title={t.summary}>
+                      <td className="py-2 px-2 max-w-[200px] truncate text-gray-700 dark:text-gray-200 text-[13.5px]" title={t.summary}>
                         {isGoal && <Star size={11} className="inline mr-1 fill-amber-400 text-amber-400 flex-shrink-0" />}
                         {t.summary}
                       </td>
                       <td className="py-2 px-2 whitespace-nowrap">
                         {t.type === 'Support'
-                          ? <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300 border border-purple-100 dark:border-purple-500/20">Support</span>
-                          : <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 border border-sky-100 dark:border-sky-500/20">Task</span>
+                          ? <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300 border border-purple-100 dark:border-purple-500/20">Support</span>
+                          : <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 border border-sky-100 dark:border-sky-500/20">Task</span>
                         }
                       </td>
-                      <td className="py-2 px-2"><Badge className={statusStyle(t.status)}>{t.status || '—'}</Badge></td>
-                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">{t.quarter || '—'}</td>
-                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[100px] text-xs" title={t.sprint}>{t.sprint || '—'}</td>
-                      <td className="py-2 px-2 whitespace-nowrap text-xs">
+                      <td className="py-2 px-2"><Badge className={`${statusStyle(t.status)} !text-[13.5px]`}>{t.status || '—'}</Badge></td>
+                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap text-[13.5px]">{t.quarter || '—'}</td>
+                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[100px] text-[13.5px]" title={t.sprint}>{t.sprint || '—'}</td>
+                      <td className="py-2 px-2 whitespace-nowrap text-[13.5px]">
                         {isOverdue(t) ? (
                           <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold">
                             <AlertTriangle size={11} /> {formatDateDMY(t.duedate)}
@@ -268,17 +268,17 @@ export default function Tasks({ tasks, highlightKey }) {
                       <td className="py-2 px-2"><Levels task={t} prefix="TC" keys={['tc1', 'tc2', 'tc3']} /></td>
                       <td className="py-2 px-2"><Levels task={t} prefix="TD" keys={['td1', 'td2', 'td3']} /></td>
                       <td className="py-2 px-2 text-right">
-                        <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300 tabular-nums">{t.storyPoints || 0}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300 tabular-nums">{t.storyPoints || 0}</span>
                       </td>
                       <td className="py-2 px-2 text-right">
-                        <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300 tabular-nums">{t.qcWeight}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300 tabular-nums">{t.qcWeight}</span>
                       </td>
-                      <td className="py-2 px-2 text-right">
+                      <td className="py-2 px-2 text-right text-[13.5px]">
                         {t.bugCount > 0
-                          ? <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 tabular-nums">{t.bugCount}</span>
+                          ? <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 tabular-nums">{t.bugCount}</span>
                           : <span className="text-gray-300 dark:text-neutral-600 tabular-nums">0</span>}
                       </td>
-                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums text-xs">{formatDateDMY(t.updated)}</td>
+                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums text-[13.5px]">{formatDateDMY(t.updated)}</td>
                     </tr>
                   )
                 })}
