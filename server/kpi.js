@@ -53,15 +53,19 @@ export function computeAggregates(tasks) {
 
   const weights = t.map((x) => x.qcWeight || 0)
   const totalQcWeight = weights.reduce((s, w) => s + w, 0)
+  const storyPointValues = t.map((x) => x.storyPoints || 0)
+  const totalStoryPoints = storyPointValues.reduce((s, p) => s + p, 0)
   const totalBug = t.reduce((s, x) => s + (x.bugCount || 0), 0)
 
   // QC Weight and Bug aggregated per Quarter (ui.md §6, §7).
   const qwByQuarter = {}
+  const spByQuarter = {}
   const bugByQuarter = {}
   const taskByQuarter = {}
   for (const x of t) {
     if (!x.quarter) continue
     qwByQuarter[x.quarter] = (qwByQuarter[x.quarter] || 0) + (x.qcWeight || 0)
+    spByQuarter[x.quarter] = (spByQuarter[x.quarter] || 0) + (x.storyPoints || 0)
     bugByQuarter[x.quarter] = (bugByQuarter[x.quarter] || 0) + (x.bugCount || 0)
     taskByQuarter[x.quarter] = (taskByQuarter[x.quarter] || 0) + 1
   }
@@ -69,11 +73,13 @@ export function computeAggregates(tasks) {
 
   // QC Weight and Bug aggregated per Sprint.
   const qwBySprint = {}
+  const spBySprint = {}
   const bugBySprint = {}
   const taskBySprint = {}
   for (const x of t) {
     if (!x.sprint) continue
     qwBySprint[x.sprint] = (qwBySprint[x.sprint] || 0) + (x.qcWeight || 0)
+    spBySprint[x.sprint] = (spBySprint[x.sprint] || 0) + (x.storyPoints || 0)
     bugBySprint[x.sprint] = (bugBySprint[x.sprint] || 0) + (x.bugCount || 0)
     taskBySprint[x.sprint] = (taskBySprint[x.sprint] || 0) + 1
   }
@@ -82,11 +88,13 @@ export function computeAggregates(tasks) {
 
   // QC Weight per Status (ui.md §6).
   const qwByStatus = {}
+  const spByStatus = {}
   const statusCounts = {}
   for (const x of t) {
     const s = x.status || 'Unknown'
     statusCounts[s] = (statusCounts[s] || 0) + 1
     qwByStatus[s] = (qwByStatus[s] || 0) + (x.qcWeight || 0)
+    spByStatus[s] = (spByStatus[s] || 0) + (x.storyPoints || 0)
   }
   // Order known statuses first, then any extras seen in the data.
   const seenStatuses = [
@@ -130,6 +138,16 @@ export function computeAggregates(tasks) {
       bySprint: sortedSprints.map((s) => ({ sprint: s, weight: qwBySprint[s] || 0 })),
       byStatus: seenStatuses.map((s) => ({ status: s, weight: qwByStatus[s] || 0 })),
       top5: [...t].sort((a, b) => b.qcWeight - a.qcWeight).slice(0, 5).map((x) => ({ key: x.key, weight: x.qcWeight })),
+    },
+    storyPoints: {
+      total: totalStoryPoints,
+      average: total ? +(totalStoryPoints / total).toFixed(2) : 0,
+      highest: storyPointValues.length ? Math.max(...storyPointValues) : 0,
+      lowest: storyPointValues.length ? Math.min(...storyPointValues) : 0,
+      byQuarter: quarters.map((q) => ({ quarter: q, points: spByQuarter[q] || 0 })),
+      bySprint: sortedSprints.map((s) => ({ sprint: s, points: spBySprint[s] || 0 })),
+      byStatus: seenStatuses.map((s) => ({ status: s, points: spByStatus[s] || 0 })),
+      top5: [...t].sort((a, b) => (b.storyPoints || 0) - (a.storyPoints || 0)).slice(0, 5).map((x) => ({ key: x.key, points: x.storyPoints || 0 })),
     },
     bug: {
       total: totalBug,

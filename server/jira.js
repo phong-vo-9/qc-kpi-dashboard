@@ -6,7 +6,7 @@ const STATUSES = ['Todo', 'In Progress', 'Ready to Test', 'Testing', 'Done', 'Re
 const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
   'created', 'updated', 'duedate', 'subtasks', 'customfield_10503', 'customfield_13212',
-  'customfield_10107', 'issuetype', 'reporter', 'issuelinks', 'customfield_11204',
+  'customfield_10109', 'customfield_10107', 'issuetype', 'reporter', 'issuelinks', 'customfield_11204',
 ]
 
 function env() {
@@ -46,6 +46,23 @@ export function parseSprint(sprintFieldVal) {
   return ''
 }
 
+function parseNumberField(value) {
+  if (value == null) return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') return Number(value) || 0
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseNumberField(item)
+      if (parsed) return parsed
+    }
+    return 0
+  }
+  if (typeof value === 'object') {
+    return parseNumberField(value.value ?? value.customfieldvalue ?? value.customfieldvalues)
+  }
+  return 0
+}
+
 function normalize(issue) {
   const f = issue.fields || {}
   const qc = f.customfield_10503
@@ -59,6 +76,7 @@ function normalize(issue) {
     assignee: f.assignee?.displayName || '',
     assignedQC: qc?.displayName || qc?.name || '',
     qcWeight: Number(f.customfield_13212) || 0,
+    storyPoints: parseNumberField(f.customfield_10109),
     labels: f.labels || [],
     project: f.project?.key || '',
     component: (f.components || []).map((c) => c.name).join(', '),

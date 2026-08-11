@@ -11,7 +11,7 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS tasks (
   key TEXT PRIMARY KEY,
   summary TEXT, status TEXT, priority TEXT, assignee TEXT, assignedQC TEXT,
-  qcWeight REAL, labels TEXT, project TEXT, component TEXT,
+  qcWeight REAL, storyPoints REAL, labels TEXT, project TEXT, component TEXT,
   created TEXT, updated TEXT, duedate TEXT, bugCount INTEGER,
   sprint TEXT, type TEXT, enddate TEXT, reporter TEXT, linkedTask TEXT
 );
@@ -23,10 +23,11 @@ try { db.exec('ALTER TABLE tasks ADD COLUMN type TEXT;'); } catch (e) {}
 try { db.exec('ALTER TABLE tasks ADD COLUMN enddate TEXT;'); } catch (e) {}
 try { db.exec('ALTER TABLE tasks ADD COLUMN reporter TEXT;'); } catch (e) {}
 try { db.exec('ALTER TABLE tasks ADD COLUMN linkedTask TEXT;'); } catch (e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN storyPoints REAL;'); } catch (e) {}
 
 const insert = db.prepare(`
-INSERT INTO tasks (key,summary,status,priority,assignee,assignedQC,qcWeight,labels,project,component,created,updated,duedate,bugCount,sprint,type,enddate,reporter,linkedTask)
-VALUES (@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint,@type,@enddate,@reporter,@linkedTask)
+INSERT INTO tasks (key,summary,status,priority,assignee,assignedQC,qcWeight,storyPoints,labels,project,component,created,updated,duedate,bugCount,sprint,type,enddate,reporter,linkedTask)
+VALUES (@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@storyPoints,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint,@type,@enddate,@reporter,@linkedTask)
 `)
 
 export function setMeta(k, v) {
@@ -48,6 +49,7 @@ export function saveTasks(tasks, projectFilter) {
     for (const r of rows) {
       insert.run({
         ...r,
+        storyPoints: Number(r.storyPoints) || 0,
         labels: JSON.stringify(r.labels || []),
         type: r.type || 'Task',
         enddate: r.enddate || null,
