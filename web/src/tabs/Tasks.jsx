@@ -94,6 +94,9 @@ export default function Tasks({ tasks, highlightKey }) {
       } else if (sortField === 'qcWeight') {
         valA = a.qcWeight || 0
         valB = b.qcWeight || 0
+      } else if (sortField === 'storyPoints') {
+        valA = a.storyPoints || 0
+        valB = b.storyPoints || 0
       }
 
       if (valA === valB) return 0
@@ -210,6 +213,7 @@ export default function Tasks({ tasks, highlightKey }) {
                   <TH className="text-center">Rev</TH>
                   <TH className="text-center">TC</TH>
                   <TH className="text-center">TD</TH>
+                  <SortableTH field="storyPoints" className="text-right">SP</SortableTH>
                   <SortableTH field="qcWeight" className="text-right">Weight</SortableTH>
                   <SortableTH field="bug" className="text-right">Bug</SortableTH>
                   <SortableTH field="updated">Updated</SortableTH>
@@ -263,6 +267,9 @@ export default function Tasks({ tasks, highlightKey }) {
                       <td className="py-2 px-2"><Levels task={t} prefix="R" keys={['review1', 'review2', 'review3']} /></td>
                       <td className="py-2 px-2"><Levels task={t} prefix="TC" keys={['tc1', 'tc2', 'tc3']} /></td>
                       <td className="py-2 px-2"><Levels task={t} prefix="TD" keys={['td1', 'td2', 'td3']} /></td>
+                      <td className="py-2 px-2 text-right">
+                        <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300 tabular-nums">{t.storyPoints || 0}</span>
+                      </td>
                       <td className="py-2 px-2 text-right">
                         <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300 tabular-nums">{t.qcWeight}</span>
                       </td>

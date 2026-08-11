@@ -8,11 +8,12 @@ const ENTITY_CHIP = {
   tc: 'bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400',
   td: 'bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400',
   qc: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400',
+  story: 'bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400',
   bug: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400',
 }
 const ENTITY_BAR = {
   task: 'bg-blue-500', review: 'bg-green-500', tc: 'bg-violet-500',
-  td: 'bg-orange-500', qc: 'bg-indigo-500', bug: 'bg-red-500',
+  td: 'bg-orange-500', qc: 'bg-indigo-500', story: 'bg-teal-500', bug: 'bg-red-500',
 }
 
 // A surface panel (charts, tables, grouped content).

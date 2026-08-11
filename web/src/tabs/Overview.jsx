@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
-  AlertTriangle, CalendarOff, ExternalLink
+  AlertTriangle, CalendarOff, ExternalLink, Gauge
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
 import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
@@ -61,7 +61,7 @@ function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClas
 
 export default function Overview({ kpi, mode, tasks = [], onNavigateToTask }) {
   const e = ENTITY[mode]
-  const { review, testCase, testDesign, ratios, averages, qcWeight, bug, status } = kpi
+  const { review, testCase, testDesign, ratios, averages, qcWeight, storyPoints, bug, status } = kpi
   const released = status.counts['Released'] || 0
   const done = status.counts['Done'] || 0
   const hasSprints = qcWeight.bySprint && qcWeight.bySprint.length > 0
@@ -105,7 +105,7 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask }) {
       </div>
 
       {/* KPI cards (§4) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         <KpiCard icon={ClipboardList} entity="task" label="Total Task" value={kpi.total}
           subtitle={`Released ${released} · Done ${done}`} />
         <KpiCard icon={ClipboardCheck} entity="review" label="Review" value={kpi.totalReview}
@@ -116,6 +116,8 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask }) {
           subtitle={`TB ${averages.testDesign} / task`} />
         <KpiCard icon={Scale} entity="qc" label="QC Weight" value={qcWeight.total}
           subtitle={`TB ${qcWeight.average} / task`} tooltip="Average QC Weight = Total QC Weight / Total Task" />
+        <KpiCard icon={Gauge} entity="story" label="Story Points" value={storyPoints.total}
+          subtitle={`TB ${storyPoints.average} / task`} tooltip="Average Story Points = Total Story Points / Total Task" />
         <KpiCard icon={Bug} entity="bug" label="Bug" value={bug.total}
           subtitle={`${bug.perTask} bug / task`} tooltip="Bug / Task = Total Bug / Total Task" />
       </div>
@@ -178,6 +180,36 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask }) {
         <div className="mt-4">
           <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QC Weight theo Status</div>
           <BarCard data={qcWeight.byStatus} dataKey="weight" xKey="status" color={e.qc} mode={mode} height={220} showLabels />
+        </div>
+      </Panel>
+
+      {/* Story Points */}
+      <Panel title="Story Points">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+          <Stat label="Total" value={storyPoints.total} />
+          <Stat label="Average / Task" value={storyPoints.average} />
+          <Stat label="Highest" value={storyPoints.highest} />
+          <Stat label="Lowest" value={storyPoints.lowest} />
+        </div>
+        <div className={`grid gap-6 ${hasSprints ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Story Points theo Quarter</div>
+            <BarCard data={storyPoints.byQuarter} dataKey="points" xKey="quarter" color={e.story} mode={mode} height={220} showLabels />
+          </div>
+          {hasSprints && (
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Story Points theo Sprint</div>
+              <BarCard data={storyPoints.bySprint} dataKey="points" xKey="sprint" color={e.story} mode={mode} height={220} showLabels />
+            </div>
+          )}
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Top 5 Task theo Story Points</div>
+            <BarCard data={storyPoints.top5} dataKey="points" xKey="key" color={e.story} mode={mode} height={220} horizontal />
+          </div>
+        </div>
+        <div className="mt-4">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Story Points theo Status</div>
+          <BarCard data={storyPoints.byStatus} dataKey="points" xKey="status" color={e.story} mode={mode} height={220} showLabels />
         </div>
       </Panel>
 

@@ -3,8 +3,8 @@
 // Charts also carry legends + direct labels as secondary encoding.
 
 export const ENTITY = {
-  light: { task: '#2a78d6', review: '#16a34a', tc: '#7c3aed', td: '#eb6834', qc: '#4f46e5', bug: '#e34948' },
-  dark: { task: '#3987e5', review: '#12965a', tc: '#9085e9', td: '#d95926', qc: '#6366f1', bug: '#e66767' },
+  light: { task: '#2a78d6', review: '#16a34a', tc: '#7c3aed', td: '#eb6834', qc: '#4f46e5', story: '#0f9f8f', bug: '#e34948' },
+  dark: { task: '#3987e5', review: '#12965a', tc: '#9085e9', td: '#d95926', qc: '#6366f1', story: '#2dd4bf', bug: '#e66767' },
 }
 
 // Chart chrome (grid / axis / surface) per mode — from the dataviz reference palette.

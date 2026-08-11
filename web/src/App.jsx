@@ -19,8 +19,8 @@ function LoadingSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-24" />
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28" />)}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-28" />)}
       </div>
       <div className="grid md:grid-cols-3 gap-4">
         {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40" />)}
