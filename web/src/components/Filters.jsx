@@ -1,27 +1,17 @@
-﻿import { useState, useEffect } from 'react'
-import { SlidersHorizontal, RotateCcw } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, ChevronDown, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { statusStyle } from '../lib/tokens.js'
 
 const EMPTY = { project: '', sprint: '', year: '', quarter: '', status: '', review: '', tc: '', td: '', type: '', label: '' }
 
-function Field({ label, value, onChange, options, render = (o) => o }) {
-  return (
-    <label className="flex flex-col gap-1 min-w-0">
-      <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-      <select
-        value={value} onChange={onChange}
-        className="border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-      >
-        <option value="">Tất cả</option>
-        {options.map((o) => <option key={o} value={o}>{render(o)}</option>)}
-      </select>
-    </label>
-  )
-}
-
-function MultiSelect({ label, value, onChange, options }) {
+function MultiSelect({ label, value, onChange, options, render = (o) => o, optionClassName, panelClassName = '' }) {
   const [open, setOpen] = useState(false)
-  const selected = value ? value.split(',') : []
-  const toggle = (opt) => {
+  const selected = useMemo(() => (
+    value ? String(value).split(',').map((v) => v.trim()).filter(Boolean) : []
+  ), [value])
+
+  const toggle = (rawOpt) => {
+    const opt = String(rawOpt)
     const next = selected.includes(opt)
       ? selected.filter((x) => x !== opt)
       : [...selected, opt]
@@ -40,6 +30,7 @@ function MultiSelect({ label, value, onChange, options }) {
     regressiontest: 'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
     dotxuat: 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
   }
+  const defaultOptionClass = 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300'
 
   return (
     <div className="flex flex-col gap-1 min-w-0 relative" onClick={(e) => e.stopPropagation()}>
@@ -47,29 +38,34 @@ function MultiSelect({ label, value, onChange, options }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center justify-between border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left w-full"
+        className="flex items-center justify-between gap-2 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-left w-full"
       >
-        <span className="truncate">
-          {selected.length === 0 ? 'Tất cả' : `${selected.length} đã chọn`}
-        </span>
-        <span className="text-xs text-gray-400 ml-1">▼</span>
+        <span className="truncate">{selected.length === 0 ? 'Tất cả' : `${selected.length} đã chọn`}</span>
+        <ChevronDown size={14} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-2 space-y-1">
-          {options.map((opt) => {
+        <div className={`absolute z-50 top-full left-0 mt-1 w-max min-w-full max-w-[min(28rem,calc(100vw-2rem))] bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-2 space-y-1 max-h-64 overflow-auto ${panelClassName}`}>
+          {options.map((rawOpt) => {
+            const opt = String(rawOpt)
             const active = selected.includes(opt)
             const key = opt.toLowerCase().replace(/[^a-z0-9]/g, '')
-            const colorClass = LABEL_COLORS[opt.toLowerCase()] || LABEL_COLORS[key] || 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300'
+            const colorClass = optionClassName?.(opt) || LABEL_COLORS[opt.toLowerCase()] || LABEL_COLORS[key] || defaultOptionClass
             return (
-              <label key={opt} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded text-xs cursor-pointer text-gray-700 dark:text-gray-200">
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={() => toggle(opt)}
-                  className="rounded border-gray-300 dark:border-neutral-600 text-blue-600 focus:ring-blue-500"
-                />
-                <span className={`px-1.5 py-0.5 rounded font-medium ${colorClass}`}>{opt}</span>
-              </label>
+              <button
+                key={opt}
+                type="button"
+                onClick={() => toggle(opt)}
+                className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors ${
+                  active
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                    : 'hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-gray-200'
+                }`}
+              >
+                <span className={`whitespace-nowrap px-1.5 py-0.5 rounded font-medium ${colorClass}`}>
+                  {render(rawOpt)}
+                </span>
+                {active && <Check size={13} className="text-blue-600 dark:text-blue-300 flex-shrink-0" />}
+              </button>
             )
           })}
         </div>
@@ -100,6 +96,11 @@ export default function Filters({ options, applied, onApply, onProjectChange }) 
 
   const levels = ['1', '2', '3']
   const FIXED_LABELS = ['Sprint-Goal', 'RegressionTest', 'ĐộtXuất']
+  const typeStyle = (type) => ({
+    Task: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 border border-sky-100 dark:border-sky-500/20',
+    Bug: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 border border-red-200 dark:border-red-500/20',
+    Support: 'bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300 border border-purple-100 dark:border-purple-500/20',
+  }[type] || 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300')
 
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm p-4">
@@ -107,15 +108,15 @@ export default function Filters({ options, applied, onApply, onProjectChange }) 
         <SlidersHorizontal size={15} /> Bộ lọc
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10 gap-3">
-        <Field label="Project" value={draft.project} onChange={set('project')} options={options.projects || []} />
-        <Field label="Sprint" value={draft.sprint} onChange={set('sprint')} options={options.sprints || []} />
-        <Field label="Year" value={draft.year} onChange={set('year')} options={options.years || []} />
-        <Field label="Quarter" value={draft.quarter} onChange={set('quarter')} options={options.quarters || []} />
-        <Field label="Status" value={draft.status} onChange={set('status')} options={options.statuses || []} />
-        <Field label="Type" value={draft.type} onChange={set('type')} options={options.types || ['Task', 'Bug']} />
-        <Field label="Review" value={draft.review} onChange={set('review')} options={levels} render={(l) => `Review ${l}`} />
-        <Field label="Test Case" value={draft.tc} onChange={set('tc')} options={levels} render={(l) => `TC ${l}`} />
-        <Field label="Test Design" value={draft.td} onChange={set('td')} options={levels} render={(l) => `TD ${l}`} />
+        <MultiSelect label="Project" value={draft.project} onChange={set('project')} options={options.projects || []} panelClassName="min-w-44" />
+        <MultiSelect label="Sprint" value={draft.sprint} onChange={set('sprint')} options={options.sprints || []} panelClassName="min-w-56" />
+        <MultiSelect label="Year" value={draft.year} onChange={set('year')} options={options.years || []} panelClassName="min-w-36" />
+        <MultiSelect label="Quarter" value={draft.quarter} onChange={set('quarter')} options={options.quarters || []} panelClassName="min-w-36" />
+        <MultiSelect label="Status" value={draft.status} onChange={set('status')} options={options.statuses || []} optionClassName={statusStyle} panelClassName="min-w-56" />
+        <MultiSelect label="Type" value={draft.type} onChange={set('type')} options={options.types || ['Task', 'Bug']} optionClassName={typeStyle} panelClassName="min-w-44" />
+        <MultiSelect label="Review" value={draft.review} onChange={set('review')} options={levels} render={(l) => `Review ${l}`} panelClassName="min-w-44" />
+        <MultiSelect label="Test Case" value={draft.tc} onChange={set('tc')} options={levels} render={(l) => `TC ${l}`} panelClassName="min-w-40" />
+        <MultiSelect label="Test Design" value={draft.td} onChange={set('td')} options={levels} render={(l) => `TD ${l}`} panelClassName="min-w-44" />
         <MultiSelect label="Label" value={draft.label} onChange={set('label')} options={FIXED_LABELS} />
       </div>
       <div className="flex justify-end gap-2 mt-3">

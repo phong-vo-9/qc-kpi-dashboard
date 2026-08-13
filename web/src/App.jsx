@@ -83,7 +83,7 @@ export default function App() {
   const refresh = async () => {
     setSyncStatus('loading')
     try {
-      const r = await api('/api/refresh' + (filters.project ? `?project=${filters.project}` : ''), { method: 'POST' })
+      const r = await api('/api/refresh' + (filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''), { method: 'POST' })
       if (r.error) {
         setSyncStatus('error')
         alert('Lỗi đồng bộ Jira:\n' + r.error)
