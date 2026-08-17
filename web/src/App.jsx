@@ -49,12 +49,9 @@ export default function App() {
 
   const load = useCallback(async () => {
     const q = query(filters)
-    // For /api/tasks we strip `type` so both tabs (Tasks + Bugs) get their own data
-    const { type: _type, ...filtersWithoutType } = filters
-    const qNoType = query(filtersWithoutType)
     const filterQ = filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''
     const [k, t, o, m] = await Promise.all([
-      api(`/api/kpi?${q}`), api(`/api/tasks?${qNoType}`), api(`/api/filters${filterQ}`), api('/api/meta'),
+      api(`/api/kpi?${q}`), api(`/api/tasks?${q}`), api(`/api/filters${filterQ}`), api('/api/meta'),
     ])
     setKpi(k); setTasks(t); setOptions(o); setMeta(m)
   }, [filters])
