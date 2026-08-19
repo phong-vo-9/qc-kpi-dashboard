@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, ExternalLink, Inbox, AlertTriangle, Star } from 'lucide-react'
+import { Search, ExternalLink, Inbox, AlertTriangle, Star, RefreshCw, Zap } from 'lucide-react'
 import { Badge, EmptyState } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
 import { jiraUrl } from '../lib/api.js'
@@ -222,6 +222,8 @@ export default function Tasks({ tasks, highlightKey }) {
               <tbody>
                 {rows.map((t) => {
                   const isGoal = (t.labels || []).some(l => ['sprintgoal', 'sprint-goal'].includes(l.toLowerCase()))
+                  const isDotXuat = (t.labels || []).some(l => ['độtxuất', 'đột xuất', 'dotxuat', 'dot xuat'].includes(l.toLowerCase().trim()))
+                  const isRegression = (t.labels || []).some(l => ['regressiontest', 'regression test'].includes(l.toLowerCase().trim()))
                   const isHighlighted = t.key === highlightKey
                   
                   return (
@@ -231,14 +233,28 @@ export default function Tasks({ tasks, highlightKey }) {
                       className={`border-b border-gray-50 dark:border-neutral-800/60 transition-all ${
                         isGoal
                           ? 'bg-amber-50/60 dark:bg-amber-500/[0.04] hover:bg-amber-100/40 dark:hover:bg-amber-500/[0.08]'
+                          : isDotXuat
+                          ? 'bg-orange-50/45 dark:bg-orange-500/[0.03] hover:bg-orange-100/30 dark:hover:bg-orange-500/[0.06]'
                           : 'hover:bg-gray-50 dark:hover:bg-neutral-800/50'
                       } ${
                         isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-neutral-900 bg-blue-500/10' : ''
                       }`}
                     >
-                      <td className={`py-2 px-2 ${isGoal ? 'border-l-[3.5px] border-l-amber-500 dark:border-l-amber-400 pl-2.5' : ''}`}>
+                      <td className={`py-2 px-2 ${
+                        isGoal 
+                          ? 'border-l-[3.5px] border-l-amber-500 dark:border-l-amber-400 pl-2.5' 
+                          : isDotXuat 
+                          ? 'border-l-[3.5px] border-l-orange-500 dark:border-l-orange-400 pl-2.5' 
+                          : ''
+                      }`}>
                         <div className="inline-flex items-center gap-1.5">
                           {isGoal && <span className="text-base select-none">🏆</span>}
+                          {isDotXuat && <Zap size={13} className="text-orange-500 fill-orange-500/10 flex-shrink-0" />}
+                          {isRegression && (
+                            <span className="p-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex-shrink-0 inline-flex items-center justify-center border border-purple-100/80 dark:border-purple-900/45 select-none" title="Regression Test">
+                              <RefreshCw size={11} className="stroke-[2.5]" />
+                            </span>
+                          )}
                           <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer"
                             className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap text-[13.5px]">
                             {t.key} <ExternalLink size={11} />
