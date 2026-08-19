@@ -38,6 +38,7 @@ export default function App() {
   const [kpi, setKpi] = useState(null)
   const [tasks, setTasks] = useState([])
   const [meta, setMeta] = useState({})
+  const [sprintAnalysis, setSprintAnalysis] = useState([])
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
   const [highlightKey, setHighlightKey] = useState(null)
 
@@ -50,10 +51,11 @@ export default function App() {
   const load = useCallback(async () => {
     const q = query(filters)
     const filterQ = filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''
-    const [k, t, o, m] = await Promise.all([
+    const [k, t, o, m, sa] = await Promise.all([
       api(`/api/kpi?${q}`), api(`/api/tasks?${q}`), api(`/api/filters${filterQ}`), api('/api/meta'),
+      api('/api/sprint-analysis').catch(() => []),
     ])
-    setKpi(k); setTasks(t); setOptions(o); setMeta(m)
+    setKpi(k); setTasks(t); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : [])
   }, [filters])
 
   const handleNavigateToTask = (key) => {
@@ -132,7 +134,7 @@ export default function App() {
         {!kpi ? (
           <LoadingSkeleton />
         ) : tab === 'overview' ? (
-          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} /></div>
+          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} /></div>
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : (

@@ -126,6 +126,58 @@ async function fetchSubtasksMap(project, e, headers) {
   return subtasksMap
 }
 
+/**
+ * Fetch the currently ACTIVE sprint for a project from Jira Agile API.
+ * Only returns sprints with state=active (i.e. today is within the sprint window).
+ * Returns null if unavailable.
+ */
+export async function fetchActiveSprint(projectKey) {
+  const e = env()
+  const headers = {
+    Authorization: authHeader(e),
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+
+  try {
+    // 1. Find boards for this project
+    const boardRes = await fetch(
+      `${e.url}/rest/agile/1.0/board?projectKeyOrId=${encodeURIComponent(projectKey)}&maxResults=50`,
+      { headers }
+    )
+    if (!boardRes.ok) return null
+    const boardData = await boardRes.json()
+    const boards = boardData.values || []
+    if (!boards.length) return null
+
+    // 2. Only look for state=active sprints — never future or closed
+    for (const board of boards) {
+      const sprintRes = await fetch(
+        `${e.url}/rest/agile/1.0/board/${board.id}/sprint?state=active&maxResults=10`,
+        { headers }
+      )
+      if (!sprintRes.ok) continue
+      const sprintData = await sprintRes.json()
+      const found = (sprintData.values || [])[0] // take the first active sprint
+      if (found) {
+        return {
+          id: found.id,
+          name: found.name,
+          state: found.state,           // will be 'active'
+          startDate: found.startDate || null,
+          endDate: found.endDate || null,
+          completeDate: found.completeDate || null,
+          goal: found.goal || '',
+          boardName: board.name,
+        }
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function fetchTasks(projectOverride) {
   const e = env()
   const project = projectOverride || e.project
