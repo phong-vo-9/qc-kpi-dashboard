@@ -65,8 +65,8 @@ export default function Tasks({ tasks, highlightKey }) {
     const list = [...filtered]
     if (sortField === 'default') {
       return list.sort((a, b) => {
-        const aGoal = (a.labels || []).some(l => l.toLowerCase() === 'sprintgoal')
-        const bGoal = (b.labels || []).some(l => l.toLowerCase() === 'sprintgoal')
+        const aGoal = (a.labels || []).some(l => ['sprintgoal', 'sprint-goal'].includes(l.toLowerCase()))
+        const bGoal = (b.labels || []).some(l => ['sprintgoal', 'sprint-goal'].includes(l.toLowerCase()))
         if (aGoal !== bGoal) return aGoal ? -1 : 1
 
         if (a.duedate !== b.duedate) {
@@ -141,7 +141,7 @@ export default function Tasks({ tasks, highlightKey }) {
     return (
       <div className="flex flex-wrap gap-1">
         {labels.map((lbl) => {
-          if (lbl.toLowerCase() === 'sprintgoal') {
+          if (['sprintgoal', 'sprint-goal'].includes(lbl.toLowerCase())) {
             return (
               <span key={lbl} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[13.5px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/35">
                 <Star size={10} className="fill-amber-500 text-amber-500" /> SprintGoal
@@ -221,7 +221,7 @@ export default function Tasks({ tasks, highlightKey }) {
               </thead>
               <tbody>
                 {rows.map((t) => {
-                  const isGoal = (t.labels || []).some(l => l.toLowerCase() === 'sprintgoal')
+                  const isGoal = (t.labels || []).some(l => ['sprintgoal', 'sprint-goal'].includes(l.toLowerCase()))
                   const isHighlighted = t.key === highlightKey
                   
                   return (
@@ -230,20 +230,22 @@ export default function Tasks({ tasks, highlightKey }) {
                       id={`task-${t.key}`}
                       className={`border-b border-gray-50 dark:border-neutral-800/60 transition-all ${
                         isGoal
-                          ? 'bg-amber-50/80 dark:bg-amber-500/[0.06] border-l-4 border-l-amber-400 hover:bg-amber-100/60 dark:hover:bg-amber-500/[0.1]'
+                          ? 'bg-amber-50/60 dark:bg-amber-500/[0.04] hover:bg-amber-100/40 dark:hover:bg-amber-500/[0.08]'
                           : 'hover:bg-gray-50 dark:hover:bg-neutral-800/50'
                       } ${
                         isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-neutral-900 bg-blue-500/10' : ''
                       }`}
                     >
-                      <td className="py-2 px-2">
-                        <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap text-[13.5px]">
-                          {t.key} <ExternalLink size={11} />
-                        </a>
+                      <td className={`py-2 px-2 ${isGoal ? 'border-l-[3.5px] border-l-amber-500 dark:border-l-amber-400 pl-2.5' : ''}`}>
+                        <div className="inline-flex items-center gap-1.5">
+                          {isGoal && <span className="text-base select-none">🏆</span>}
+                          <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap text-[13.5px]">
+                            {t.key} <ExternalLink size={11} />
+                          </a>
+                        </div>
                       </td>
                       <td className="py-2 px-2 max-w-[200px] truncate text-gray-700 dark:text-gray-200 text-[13.5px]" title={t.summary}>
-                        {isGoal && <Star size={11} className="inline mr-1 fill-amber-400 text-amber-400 flex-shrink-0" />}
                         {t.summary}
                       </td>
                       <td className="py-2 px-2 whitespace-nowrap">
