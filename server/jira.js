@@ -63,7 +63,7 @@ function parseNumberField(value) {
   return 0
 }
 
-function normalize(issue) {
+function normalize(issue, subtasksMap = {}) {
   const f = issue.fields || {}
   const qc = f.customfield_10503
   const links = f.issuelinks || []
@@ -83,13 +83,47 @@ function normalize(issue) {
     created: f.created || null,
     updated: f.updated || null,
     duedate: f.duedate || null,
-    bugCount: (f.subtasks || []).length,
+    bugCount: subtasksMap[issue.key] || 0,
     sprint: parseSprint(f.customfield_10107),
     type: f.issuetype?.name || 'Task',
     enddate: f.customfield_11204 || null,
     reporter: f.reporter?.displayName || '',
     linkedTask,
   }
+}
+
+async function fetchSubtasksMap(project, e, headers) {
+  const jql = `project = "${project}" AND reporter = "${e.qcName}"`
+  const subtasksMap = {}
+  let startAt = 0
+  const maxResults = 100
+
+  while (true) {
+    const res = await fetch(`${e.url}/rest/api/2/search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jql,
+        fields: ['parent'],
+        startAt,
+        maxResults,
+      }),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Jira subtasks fetch error ${res.status}: ${text.slice(0, 300)}`)
+    }
+    const data = await res.json()
+    for (const issue of data.issues || []) {
+      const parentKey = issue.fields?.parent?.key
+      if (parentKey) {
+        subtasksMap[parentKey] = (subtasksMap[parentKey] || 0) + 1
+      }
+    }
+    startAt += maxResults
+    if (startAt >= (data.total || 0)) break
+  }
+  return subtasksMap
 }
 
 export async function fetchTasks(projectOverride) {
@@ -100,6 +134,13 @@ export async function fetchTasks(projectOverride) {
     Authorization: authHeader(e),
     'Content-Type': 'application/json',
     Accept: 'application/json',
+  }
+
+  let subtasksMap = {}
+  try {
+    subtasksMap = await fetchSubtasksMap(project, e, headers)
+  } catch (err) {
+    console.error('Không thể lấy danh sách bug subtasks:', err.message)
   }
 
   const out = []
@@ -149,7 +190,7 @@ export async function fetchTasks(projectOverride) {
         if (!matches) continue
       }
 
-      out.push(normalize(issue))
+      out.push(normalize(issue, subtasksMap))
     }
 
     startAt += maxResults
