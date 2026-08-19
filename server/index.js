@@ -1,6 +1,6 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
-import { fetchTasks } from './jira.js'
+import { fetchTasks, fetchActiveSprint } from './jira.js'
 import { saveTasks, getTasks, getMeta } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
@@ -111,5 +111,99 @@ app.get('/api/filters', (req, res) => {
 
 app.get('/api/meta', (_req, res) =>
   res.json({ lastRefresh: getMeta('lastRefresh'), qcName: process.env.JIRA_QC_NAME || '' }))
+
+/**
+ * GET /api/sprint-analysis
+ * Source of truth for active sprint = Jira Agile API (state=active).
+ * Task stats are then computed from DB tasks matching that sprint name (scoped to QC).
+ * Falls back to heuristic (most recent sprint with open tasks) if Jira Agile API fails.
+ */
+app.get('/api/sprint-analysis', async (_req, res) => {
+  try {
+    const allTasks = getTasks().map(decorate)
+
+    // Group tasks by project
+    const projectMap = {}
+    for (const t of allTasks) {
+      if (!t.project) continue
+      if (!projectMap[t.project]) projectMap[t.project] = []
+      projectMap[t.project].push(t)
+    }
+
+    const DONE_STATUSES = new Set(['done', 'released'])
+
+    const results = []
+    for (const [project, tasks] of Object.entries(projectMap)) {
+      // ── Step 1: Ask Jira for the authoritative active sprint ──────────────
+      let sprintMeta = null
+      let activeSprint = null
+      try {
+        sprintMeta = await fetchActiveSprint(project)
+        if (sprintMeta) activeSprint = sprintMeta.name
+      } catch {
+        // ignore — fall through to heuristic
+      }
+
+      // ── Step 2: Fallback — derive active sprint from task data ─────────────
+      // Only used when Jira Agile API is unavailable.
+      if (!activeSprint) {
+        const sprintNames = [...new Set(tasks.map((t) => t.sprint).filter(Boolean))]
+        sprintNames.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+        // Pick most recent sprint that still has open tasks
+        activeSprint = sprintNames.findLast((s) => {
+          const spTasks = tasks.filter((t) => t.sprint === s && t.type !== 'Bug')
+          return spTasks.some((t) => !DONE_STATUSES.has((t.status || '').toLowerCase().trim()))
+        }) || sprintNames[sprintNames.length - 1]
+      }
+
+      if (!activeSprint) {
+        results.push({ project, sprintName: null, sprintMeta: null, totalTasks: 0, doneTasks: 0,
+          totalSP: 0, doneSP: 0, totalWeight: 0, doneWeight: 0, statusCounts: {}, missingDue: 0, overdueDue: 0 })
+        continue
+      }
+
+      // ── Step 3: Compute stats from QC's tasks in that sprint ──────────────
+      const spTasks = tasks.filter((t) => t.sprint === activeSprint && t.type !== 'Bug')
+      const doneTasks = spTasks.filter((t) => DONE_STATUSES.has((t.status || '').toLowerCase().trim())).length
+      const totalSP = spTasks.reduce((s, t) => s + (t.storyPoints || 0), 0)
+      const doneSP = spTasks.filter((t) => DONE_STATUSES.has((t.status || '').toLowerCase().trim()))
+        .reduce((s, t) => s + (t.storyPoints || 0), 0)
+      const totalWeight = spTasks.reduce((s, t) => s + (t.qcWeight || 0), 0)
+      const doneWeight = spTasks.filter((t) => DONE_STATUSES.has((t.status || '').toLowerCase().trim()))
+        .reduce((s, t) => s + (t.qcWeight || 0), 0)
+
+      const statusCounts = {}
+      for (const t of spTasks) {
+        const s = t.status || 'Unknown'
+        statusCounts[s] = (statusCounts[s] || 0) + 1
+      }
+
+      const today = new Date().toISOString().split('T')[0]
+      const missingDue = spTasks.filter((t) => !t.duedate).length
+      const overdueDue = spTasks.filter(
+        (t) => t.duedate && t.duedate < today && !DONE_STATUSES.has((t.status || '').toLowerCase().trim())
+      ).length
+
+      results.push({
+        project,
+        sprintName: activeSprint,
+        sprintMeta,  // { startDate, endDate, state:'active', goal, ... } or null
+        totalTasks: spTasks.length,
+        doneTasks,
+        totalSP,
+        doneSP,
+        totalWeight,
+        doneWeight,
+        statusCounts,
+        missingDue,
+        overdueDue,
+      })
+    }
+
+    res.json(results)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 app.listen(PORT, () => console.log(`QC KPI API → http://localhost:${PORT}`))
