@@ -80,14 +80,21 @@ function SprintCountdown({ startDate, endDate }) {
   const now = new Date()
   const start = new Date(startDate)
   const end = new Date(endDate)
-  const totalMs = end - start
-  const elapsedMs = Math.max(0, now - start)
-  const remainMs = Math.max(0, end - now)
+
+  // Normalize to midnight local time to avoid timezone offsets in Jira's endDate
+  // causing different sprint cards to show different day counts for the same calendar date
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const endMidnight   = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+  const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+
+  const totalMs = endMidnight - startMidnight
+  const elapsedMs = Math.max(0, todayMidnight - startMidnight)
+  const remainMs = Math.max(0, endMidnight - todayMidnight)
   const daysTotal = Math.round(totalMs / 86400000)
-  const daysLeft = Math.ceil(remainMs / 86400000)
+  const daysLeft = Math.round(remainMs / 86400000)
   const pct = totalMs > 0 ? Math.min(100, (elapsedMs / totalMs) * 100) : 100
 
-  const isOverdue = now > end
+  const isOverdue = todayMidnight > endMidnight
   const isUrgent = !isOverdue && daysLeft <= 3
   const barColor = isOverdue ? '#ef4444' : isUrgent ? '#f59e0b' : '#22c55e'
 
