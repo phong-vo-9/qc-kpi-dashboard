@@ -27,6 +27,11 @@ const sortStatuses = (statuses) => [
   ...statuses.filter((status) => !STATUS_ORDER.includes(status)).sort(),
 ]
 
+const ENVIRONMENT_ORDER = ['Dev', 'UAT', 'Canary', 'Staging', 'Production']
+
+const emptyEnvironmentCounts = () =>
+  Object.fromEntries(ENVIRONMENT_ORDER.map((env) => [env, 0]))
+
 // Apply global filters (ui.md §3): Project / Year / Quarter / Status +
 // Review / Test Case / Test Design level. Year & quarter come from labels.
 // review/tc/td accept a level "1" | "2" | "3" → require that level's flag.
@@ -158,7 +163,8 @@ app.get('/api/sprint-analysis', async (_req, res) => {
 
       if (!activeSprint) {
         results.push({ project, sprintName: null, sprintMeta: null, totalTasks: 0, doneTasks: 0,
-          totalSP: 0, doneSP: 0, totalWeight: 0, doneWeight: 0, statusCounts: {}, missingDue: 0, overdueDue: 0 })
+          totalSP: 0, doneSP: 0, totalWeight: 0, doneWeight: 0, statusCounts: {},
+          environmentCounts: emptyEnvironmentCounts(), missingEnvironment: 0, missingDue: 0, overdueDue: 0 })
         continue
       }
 
@@ -173,9 +179,16 @@ app.get('/api/sprint-analysis', async (_req, res) => {
         .reduce((s, t) => s + (t.qcWeight || 0), 0)
 
       const statusCounts = {}
+      const environmentCounts = emptyEnvironmentCounts()
+      let missingEnvironment = 0
       for (const t of spTasks) {
         const s = t.status || 'Unknown'
         statusCounts[s] = (statusCounts[s] || 0) + 1
+        if (t.environment && Object.prototype.hasOwnProperty.call(environmentCounts, t.environment)) {
+          environmentCounts[t.environment] += 1
+        } else {
+          missingEnvironment += 1
+        }
       }
 
       const today = new Date().toISOString().split('T')[0]
@@ -195,6 +208,8 @@ app.get('/api/sprint-analysis', async (_req, res) => {
         totalWeight,
         doneWeight,
         statusCounts,
+        environmentCounts,
+        missingEnvironment,
         missingDue,
         overdueDue,
       })

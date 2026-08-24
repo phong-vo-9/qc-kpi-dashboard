@@ -7,7 +7,10 @@ const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
   'created', 'updated', 'duedate', 'subtasks', 'customfield_10503', 'customfield_13212',
   'customfield_10109', 'customfield_10107', 'issuetype', 'reporter', 'issuelinks', 'customfield_11204',
+  'customfield_10500', 'customfield_10403',
 ]
+
+const ENVIRONMENT_ORDER = ['Dev', 'UAT', 'Canary', 'Staging', 'Production']
 
 function env() {
   return {
@@ -63,6 +66,37 @@ function parseNumberField(value) {
   return 0
 }
 
+function parseTextField(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value).trim()
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseTextField(item)
+      if (parsed) return parsed
+    }
+    return ''
+  }
+  if (typeof value === 'object') {
+    return parseTextField(
+      value.value ??
+      value.name ??
+      value.customfieldvalue ??
+      value.customfieldvalues ??
+      value.key ??
+      ''
+    )
+  }
+  return ''
+}
+
+function normalizeEnvironment(value) {
+  const raw = parseTextField(value)
+  if (!raw) return ''
+  const match = ENVIRONMENT_ORDER.find((env) => env.toLowerCase() === raw.toLowerCase())
+  return match || raw
+}
+
 function normalize(issue, subtasksMap = {}) {
   const f = issue.fields || {}
   const qc = f.customfield_10503
@@ -77,6 +111,7 @@ function normalize(issue, subtasksMap = {}) {
     assignedQC: qc?.displayName || qc?.name || '',
     qcWeight: Number(f.customfield_13212) || 0,
     storyPoints: parseNumberField(f.customfield_10109),
+    environment: normalizeEnvironment(f.customfield_10500 ?? f.customfield_10403),
     labels: f.labels || [],
     project: f.project?.key || '',
     component: (f.components || []).map((c) => c.name).join(', '),

@@ -34,6 +34,23 @@ const TH = ({ children, className = '' }) => (
 
 const PAGE_SIZES = [10, 20, 50, 100]
 
+const ENV_STYLE = {
+  Dev: 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300 border border-green-100 dark:border-green-500/20',
+  UAT: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 border border-sky-100 dark:border-sky-500/20',
+  Canary: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-100 dark:border-amber-500/20',
+  Staging: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300 border border-violet-100 dark:border-violet-500/20',
+  Production: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300 border border-red-100 dark:border-red-500/20',
+}
+
+function EnvironmentBadge({ value }) {
+  if (!value) return <span className="text-gray-300 dark:text-neutral-600">—</span>
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[13.5px] font-medium whitespace-nowrap ${ENV_STYLE[value] || 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300'}`}>
+      {value}
+    </span>
+  )
+}
+
 export default function Tasks({ tasks, highlightKey }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -49,7 +66,11 @@ export default function Tasks({ tasks, highlightKey }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return taskIssues
-    return taskIssues.filter((t) => t.key.toLowerCase().includes(q) || (t.summary || '').toLowerCase().includes(q))
+    return taskIssues.filter((t) =>
+      t.key.toLowerCase().includes(q) ||
+      (t.summary || '').toLowerCase().includes(q) ||
+      (t.environment || '').toLowerCase().includes(q)
+    )
   }, [taskIssues, search])
 
   const handleSort = (field) => {
@@ -209,6 +230,7 @@ export default function Tasks({ tasks, highlightKey }) {
                   <SortableTH field="status">Status</SortableTH>
                   <TH>Q</TH>
                   <TH>Sprint</TH>
+                  <SortableTH field="environment">Env</SortableTH>
                   <SortableTH field="duedate">Due</SortableTH>
                   <TH className="text-center">Rev</TH>
                   <TH className="text-center">TC</TH>
@@ -273,6 +295,7 @@ export default function Tasks({ tasks, highlightKey }) {
                       <td className="py-2 px-2"><Badge className={`${statusStyle(t.status)} !text-[13.5px]`}>{t.status || '—'}</Badge></td>
                       <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap text-[13.5px]">{t.quarter || '—'}</td>
                       <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[100px] text-[13.5px]" title={t.sprint}>{t.sprint || '—'}</td>
+                      <td className="py-2 px-2"><EnvironmentBadge value={t.environment} /></td>
                       <td className="py-2 px-2 whitespace-nowrap text-[13.5px]">
                         {isOverdue(t) ? (
                           <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold">
