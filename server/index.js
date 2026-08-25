@@ -32,6 +32,10 @@ const ENVIRONMENT_ORDER = ['Dev', 'UAT', 'Canary', 'Staging', 'Production']
 const emptyEnvironmentCounts = () =>
   Object.fromEntries(ENVIRONMENT_ORDER.map((env) => [env, 0]))
 
+// Keep sprint analysis focused on GOP for now.
+// Add AW back here when the analysis panel needs it again.
+const SPRINT_ANALYSIS_PROJECTS = ['GOP']
+
 // Apply global filters (ui.md §3): Project / Year / Quarter / Status +
 // Review / Test Case / Test Design level. Year & quarter come from labels.
 // review/tc/td accept a level "1" | "2" | "3" → require that level's flag.
@@ -131,6 +135,7 @@ app.get('/api/sprint-analysis', async (_req, res) => {
     const projectMap = {}
     for (const t of allTasks) {
       if (!t.project) continue
+      if (!SPRINT_ANALYSIS_PROJECTS.includes(t.project)) continue
       if (!projectMap[t.project]) projectMap[t.project] = []
       projectMap[t.project].push(t)
     }

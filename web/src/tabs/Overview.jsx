@@ -268,7 +268,7 @@ function SprintAnalysisPanel({ sprintAnalysis }) {
   }
   return (
     <Panel title="Phân tích Sprint Active">
-      <div className={`grid gap-4 ${sprintAnalysis.length === 1 ? 'md:grid-cols-1 max-w-lg' : 'md:grid-cols-2'}`}>
+      <div className={`grid w-full gap-4 ${sprintAnalysis.length === 1 ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
         {sprintAnalysis.map((d) => <SprintProjectCard key={d.project} data={d} />)}
       </div>
     </Panel>
@@ -330,7 +330,7 @@ function SprintEnvironmentPanel({ sprintAnalysis }) {
               Chưa có Env: <span className="font-semibold tabular-nums">{missingEnvironment}</span> task
             </div>
           )}
-          <div className={`grid gap-4 ${activeProjects.length === 1 ? 'md:grid-cols-1 max-w-xl' : 'md:grid-cols-2'}`}>
+          <div className={`grid w-full gap-4 ${activeProjects.length === 1 ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
             {activeProjects.map((d) => {
             const col = PROJECT_COLORS[d.project] || DEFAULT_COLOR
             const total = d.totalTasks || 0
