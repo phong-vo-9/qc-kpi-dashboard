@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import {
   ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
-  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap
+  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap, Server
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
 import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
@@ -67,6 +67,15 @@ const PROJECT_COLORS = {
 }
 const DEFAULT_COLOR = { bg: 'bg-gray-50/30 dark:bg-neutral-800/30', border: 'border-gray-200 dark:border-neutral-700', badge: 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-gray-300', bar: '#6b7280', icon: '📋' }
 
+const ENVIRONMENT_ORDER = ['Dev', 'UAT', 'Canary', 'Staging', 'Production']
+const ENVIRONMENT_STYLE = {
+  Dev: { chip: 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300', bar: 'bg-green-500' },
+  UAT: { chip: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300', bar: 'bg-sky-500' },
+  Canary: { chip: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300', bar: 'bg-amber-500' },
+  Staging: { chip: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300', bar: 'bg-violet-500' },
+  Production: { chip: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300', bar: 'bg-red-500' },
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
@@ -80,14 +89,21 @@ function SprintCountdown({ startDate, endDate }) {
   const now = new Date()
   const start = new Date(startDate)
   const end = new Date(endDate)
-  const totalMs = end - start
-  const elapsedMs = Math.max(0, now - start)
-  const remainMs = Math.max(0, end - now)
+
+  // Normalize to midnight local time to avoid timezone offsets in Jira's endDate
+  // causing different sprint cards to show different day counts for the same calendar date
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const endMidnight   = new Date(end.getFullYear(), end.getMonth(), end.getDate())
+  const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+
+  const totalMs = endMidnight - startMidnight
+  const elapsedMs = Math.max(0, todayMidnight - startMidnight)
+  const remainMs = Math.max(0, endMidnight - todayMidnight)
   const daysTotal = Math.round(totalMs / 86400000)
-  const daysLeft = Math.ceil(remainMs / 86400000)
+  const daysLeft = Math.round(remainMs / 86400000)
   const pct = totalMs > 0 ? Math.min(100, (elapsedMs / totalMs) * 100) : 100
 
-  const isOverdue = now > end
+  const isOverdue = todayMidnight > endMidnight
   const isUrgent = !isOverdue && daysLeft <= 3
   const barColor = isOverdue ? '#ef4444' : isUrgent ? '#f59e0b' : '#22c55e'
 
@@ -245,14 +261,14 @@ function SprintProjectCard({ data }) {
 function SprintAnalysisPanel({ sprintAnalysis }) {
   if (!sprintAnalysis || sprintAnalysis.length === 0) {
     return (
-      <Panel title="Phân tích Sprint Active">
+      <Panel title="Phân tích Sprint Active" className="h-full">
         <p className="text-sm text-gray-400">Đang tải thông tin sprint...</p>
       </Panel>
     )
   }
   return (
-    <Panel title="Phân tích Sprint Active">
-      <div className={`grid gap-4 ${sprintAnalysis.length === 1 ? 'md:grid-cols-1 max-w-lg' : 'md:grid-cols-2'}`}>
+    <Panel title="Phân tích Sprint Active" className="h-full">
+      <div className={`grid w-full gap-4 ${sprintAnalysis.length === 1 ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
         {sprintAnalysis.map((d) => <SprintProjectCard key={d.project} data={d} />)}
       </div>
     </Panel>
@@ -260,6 +276,119 @@ function SprintAnalysisPanel({ sprintAnalysis }) {
 }
 
 // ─── Main Overview ────────────────────────────────────────────────────────────
+
+function SprintEnvironmentPanel({ sprintAnalysis }) {
+  if (!sprintAnalysis || sprintAnalysis.length === 0) {
+    return (
+      <Panel title="Môi trường Sprint Active" className="h-full">
+        <p className="text-sm text-gray-400">Đang tải thống kê environment...</p>
+      </Panel>
+    )
+  }
+
+  const activeProjects = sprintAnalysis.filter((d) => d.sprintName)
+  const totalsByEnv = ENVIRONMENT_ORDER.reduce((acc, env) => {
+    acc[env] = 0
+    return acc
+  }, {})
+  let totalTasks = 0
+  let missingEnvironment = 0
+  for (const d of activeProjects) {
+    totalTasks += d.totalTasks || 0
+    missingEnvironment += d.missingEnvironment || 0
+    const counts = d.environmentCounts || {}
+    for (const env of ENVIRONMENT_ORDER) {
+      totalsByEnv[env] += counts[env] || 0
+    }
+  }
+
+  return (
+    <Panel
+      title="Môi trường Sprint Active"
+      className="h-full"
+      right={<Server size={16} className="text-gray-400" />}
+    >
+      {activeProjects.length === 0 ? (
+        <p className="text-sm text-gray-400">Không tìm thấy sprint active để thống kê environment.</p>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            {ENVIRONMENT_ORDER.map((env) => {
+              const count = totalsByEnv[env] || 0
+              const pct = totalTasks > 0 ? Math.round((count / totalTasks) * 100) : 0
+              const envStyle = ENVIRONMENT_STYLE[env]
+              return (
+                <div key={env} className="rounded-lg border border-gray-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-950/40 p-2">
+                  <div className={`inline-flex px-2 py-0.5 rounded-md text-xs font-medium ${envStyle.chip}`}>{env}</div>
+                  <div className="mt-1 text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">{count}</div>
+                  <div className="text-[11px] text-gray-400">{pct}%</div>
+                </div>
+              )
+            })}
+          </div>
+          {missingEnvironment > 0 && (
+            <div className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
+              Chưa có Env: <span className="font-semibold tabular-nums">{missingEnvironment}</span> task
+            </div>
+          )}
+          <div className={`grid w-full gap-4 ${activeProjects.length === 1 ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
+            {activeProjects.map((d) => {
+            const col = PROJECT_COLORS[d.project] || DEFAULT_COLOR
+            const total = d.totalTasks || 0
+            const counts = d.environmentCounts || {}
+            return (
+              <div key={d.project} className={`p-4 rounded-xl border ${col.bg} ${col.border}`}>
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{col.icon}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-50">{d.project}</span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${col.badge}`}>Active</span>
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5" title={d.sprintName}>
+                      {d.sprintName}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{total}</div>
+                    <div className="text-[11px] text-gray-400">tasks</div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {ENVIRONMENT_ORDER.map((env) => {
+                    const count = counts[env] || 0
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0
+                    const envStyle = ENVIRONMENT_STYLE[env]
+                    return (
+                      <div key={env}>
+                        <div className="flex items-center justify-between gap-3 mb-1">
+                          <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${envStyle.chip}`}>{env}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                            {count} task{count !== 1 ? 's' : ''} · {pct}%
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/70 dark:bg-neutral-800 overflow-hidden">
+                          <div className={`h-full rounded-full ${envStyle.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {(d.missingEnvironment || 0) > 0 && (
+                    <div className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
+                      Chưa có Env: <span className="font-semibold tabular-nums">{d.missingEnvironment}</span> task
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+            })}
+          </div>
+        </div>
+      )}
+    </Panel>
+  )
+}
 
 export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, sprintAnalysis = [] }) {
   const e = ENTITY[mode]
@@ -332,8 +461,15 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
 
   return (
     <div className="space-y-6">
-      {/* Sprint Analysis Panel */}
-      <SprintAnalysisPanel sprintAnalysis={sprintAnalysis} />
+      {/* Sprint panels */}
+      <div className="grid gap-4 xl:grid-cols-2 items-stretch">
+        <div className="min-w-0 h-full">
+          <SprintAnalysisPanel sprintAnalysis={sprintAnalysis} />
+        </div>
+        <div className="min-w-0 h-full">
+          <SprintEnvironmentPanel sprintAnalysis={sprintAnalysis} />
+        </div>
+      </div>
 
       {/* Báo cáo trễ hạn */}
       <div className="grid md:grid-cols-2 gap-4">

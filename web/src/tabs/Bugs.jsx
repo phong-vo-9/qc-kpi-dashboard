@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, ExternalLink, Inbox, AlertTriangle, Bug } from 'lucide-react'
+import { Search, ExternalLink, Inbox, AlertTriangle, Bug, CalendarOff } from 'lucide-react'
 import { Badge, EmptyState, Panel, Stat } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
 import { jiraUrl } from '../lib/api.js'
@@ -20,7 +20,56 @@ const TH = ({ children, className = '' }) => (
 
 const PAGE_SIZES = [10, 20, 50, 100]
 
-export default function Bugs({ tasks, highlightKey }) {
+function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClass }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="p-4 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${colorClass}`}>
+            <Icon size={18} />
+          </span>
+          <span className="font-medium text-sm text-gray-700 dark:text-gray-200">{title}</span>
+        </div>
+        <div className="text-2xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">{count}</div>
+      </div>
+      {count > 0 && (
+        <div className="mt-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {expanded ? 'Ẩn danh sách' : 'Xem danh sách'}
+          </button>
+          {expanded && (
+            <ul className="mt-2 max-h-40 overflow-y-auto space-y-1.5 divide-y divide-gray-100 dark:divide-neutral-800 text-xs">
+              {tasks.map((t) => (
+                <li key={t.key} className="pt-1.5 first:pt-0 flex items-center justify-between gap-2">
+                  <span className="text-gray-600 dark:text-gray-400 truncate max-w-[200px] sm:max-w-md" title={t.summary}>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{t.key}</span>: {t.summary}
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => onNavigate(t.key)}
+                      className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 font-medium"
+                    >
+                      Xem
+                    </button>
+                    <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -31,6 +80,13 @@ export default function Bugs({ tasks, highlightKey }) {
   const bugs = useMemo(() => {
     return tasks.filter((x) => x.type === 'Bug')
   }, [tasks])
+
+  const dueDateWarnings = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    const missingDue = bugs.filter((x) => !x.duedate)
+    const overdueDue = bugs.filter((x) => x.duedate && x.duedate < todayStr && x.status !== 'Done' && x.status !== 'Released')
+    return { missingDue, overdueDue }
+  }, [bugs])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -53,11 +109,24 @@ export default function Bugs({ tasks, highlightKey }) {
       let valA = a[sortField]
       let valB = b[sortField]
 
+      if (sortField === 'storyPoints') {
+        valA = a.storyPoints || 0
+        valB = b.storyPoints || 0
+      } else if (sortField === 'qcWeight') {
+        valA = a.qcWeight || 0
+        valB = b.qcWeight || 0
+      }
+
       if (valA === valB) return 0
       if (valA == null || valA === '') return 1
       if (valB == null || valB === '') return -1
 
-      let cmp = String(valA).localeCompare(String(valB))
+      let cmp = 0
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        cmp = valA - valB
+      } else {
+        cmp = String(valA).localeCompare(String(valB))
+      }
       return sortDirection === 'asc' ? cmp : -cmp
     })
   }, [filtered, sortField, sortDirection])
@@ -113,6 +182,27 @@ export default function Bugs({ tasks, highlightKey }) {
 
   return (
     <div className="space-y-6">
+      <Panel title="Cảnh báo Due date" right={<AlertTriangle size={16} className="text-gray-400" />}>
+        <div className="grid md:grid-cols-2 gap-4">
+          <LateReportCard
+            title="Thiếu Due date"
+            icon={CalendarOff}
+            count={dueDateWarnings.missingDue.length}
+            tasks={dueDateWarnings.missingDue}
+            onNavigate={onNavigateToTask}
+            colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"
+          />
+          <LateReportCard
+            title="Trễ Due date"
+            icon={AlertTriangle}
+            count={dueDateWarnings.overdueDue.length}
+            tasks={dueDateWarnings.overdueDue}
+            onNavigate={onNavigateToTask}
+            colorClass="bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400"
+          />
+        </div>
+      </Panel>
+
       {/* KPI Cards for Bugs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm p-4 flex items-center gap-4">
@@ -184,9 +274,11 @@ export default function Bugs({ tasks, highlightKey }) {
                 <thead>
                   <tr className="text-left border-b border-gray-100 dark:border-neutral-800">
                     <SortableTH field="key">Bug ID</SortableTH>
-                    <TH>Summary</TH>
+                    <TH className="w-[260px] max-w-[260px]">Summary</TH>
                     <SortableTH field="status">Status</SortableTH>
                     <SortableTH field="priority">Priority</SortableTH>
+                    <SortableTH field="storyPoints" className="text-right">SP</SortableTH>
+                    <SortableTH field="qcWeight" className="text-right">Weight</SortableTH>
                     <SortableTH field="project">Project</SortableTH>
                     <SortableTH field="reporter">Reporter</SortableTH>
                     <SortableTH field="linkedTask">Linked Task</SortableTH>
@@ -210,11 +302,21 @@ export default function Bugs({ tasks, highlightKey }) {
                             {t.key} <ExternalLink size={12} />
                           </a>
                         </td>
-                        <td className="py-2 px-3 max-w-xs truncate text-gray-700 dark:text-gray-200" title={t.summary}>{t.summary}</td>
+                        <td className="py-2 px-3 w-[260px] max-w-[260px] truncate text-gray-700 dark:text-gray-200" title={t.summary}>{t.summary}</td>
                         <td className="py-2 px-3"><Badge className={statusStyle(t.status)}>{t.status || '—'}</Badge></td>
                         <td className="py-2 px-3">
                           <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-700 dark:bg-neutral-800 dark:text-gray-300">
                             {t.priority || '—'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300 tabular-nums">
+                            {t.storyPoints || 0}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300 tabular-nums">
+                            {t.qcWeight || 0}
                           </span>
                         </td>
                         <td className="py-2 px-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{t.project || '—'}</td>

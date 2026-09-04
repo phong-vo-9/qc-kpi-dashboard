@@ -138,7 +138,7 @@ export default function App() {
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : (
-          <Bugs tasks={tasks} highlightKey={highlightKey} />
+          <Bugs tasks={tasks} highlightKey={highlightKey} onNavigateToTask={handleNavigateToTask} />
         )}
       </main>
     </div>
