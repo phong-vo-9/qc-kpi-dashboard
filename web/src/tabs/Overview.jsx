@@ -261,13 +261,13 @@ function SprintProjectCard({ data }) {
 function SprintAnalysisPanel({ sprintAnalysis }) {
   if (!sprintAnalysis || sprintAnalysis.length === 0) {
     return (
-      <Panel title="Phân tích Sprint Active">
+      <Panel title="Phân tích Sprint Active" className="h-full">
         <p className="text-sm text-gray-400">Đang tải thông tin sprint...</p>
       </Panel>
     )
   }
   return (
-    <Panel title="Phân tích Sprint Active">
+    <Panel title="Phân tích Sprint Active" className="h-full">
       <div className={`grid w-full gap-4 ${sprintAnalysis.length === 1 ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
         {sprintAnalysis.map((d) => <SprintProjectCard key={d.project} data={d} />)}
       </div>
@@ -280,7 +280,7 @@ function SprintAnalysisPanel({ sprintAnalysis }) {
 function SprintEnvironmentPanel({ sprintAnalysis }) {
   if (!sprintAnalysis || sprintAnalysis.length === 0) {
     return (
-      <Panel title="Môi trường Sprint Active">
+      <Panel title="Môi trường Sprint Active" className="h-full">
         <p className="text-sm text-gray-400">Đang tải thống kê environment...</p>
       </Panel>
     )
@@ -305,6 +305,7 @@ function SprintEnvironmentPanel({ sprintAnalysis }) {
   return (
     <Panel
       title="Môi trường Sprint Active"
+      className="h-full"
       right={<Server size={16} className="text-gray-400" />}
     >
       {activeProjects.length === 0 ? (
@@ -460,9 +461,15 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
 
   return (
     <div className="space-y-6">
-      {/* Sprint Analysis Panel */}
-      <SprintAnalysisPanel sprintAnalysis={sprintAnalysis} />
-      <SprintEnvironmentPanel sprintAnalysis={sprintAnalysis} />
+      {/* Sprint panels */}
+      <div className="grid gap-4 xl:grid-cols-2 items-stretch">
+        <div className="min-w-0 h-full">
+          <SprintAnalysisPanel sprintAnalysis={sprintAnalysis} />
+        </div>
+        <div className="min-w-0 h-full">
+          <SprintEnvironmentPanel sprintAnalysis={sprintAnalysis} />
+        </div>
+      </div>
 
       {/* Báo cáo trễ hạn */}
       <div className="grid md:grid-cols-2 gap-4">
