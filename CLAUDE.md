@@ -62,6 +62,7 @@ Hard-coded in `server/jira.js` (change here if the live instance differs):
 - Custom fields: `customfield_10503` = Assigned QC, `customfield_13212` = QC Weight.
 - Statuses fetched: `Todo, In Progress, Ready to Test, Testing, Done, Released`.
 - Issue type: `Task` only. Bug count = number of subtasks (`fields.subtasks.length`).
+- Bug subtask count excludes items whose status or resolution is `Won't Do`.
 
 ## Label → KPI rules (see `parseLabels`)
 

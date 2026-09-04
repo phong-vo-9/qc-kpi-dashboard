@@ -90,6 +90,10 @@ function parseTextField(value) {
   return ''
 }
 
+function normalizeStatusText(value) {
+  return parseTextField(value).toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim()
+}
+
 function normalizeEnvironment(value) {
   const raw = parseTextField(value)
   if (!raw) return ''
@@ -127,6 +131,11 @@ function normalize(issue, subtasksMap = {}) {
   }
 }
 
+function isWonTDoIssue(issue) {
+  const f = issue.fields || {}
+  return [f.status?.name, f.resolution?.name, f.resolution].some((value) => normalizeStatusText(value) === "won't do")
+}
+
 async function fetchSubtasksMap(project, e, headers) {
   const jql = `project = "${project}" AND reporter = "${e.qcName}"`
   const subtasksMap = {}
@@ -139,7 +148,7 @@ async function fetchSubtasksMap(project, e, headers) {
       headers,
       body: JSON.stringify({
         jql,
-        fields: ['parent'],
+        fields: ['parent', 'status', 'resolution'],
         startAt,
         maxResults,
       }),
@@ -151,7 +160,7 @@ async function fetchSubtasksMap(project, e, headers) {
     const data = await res.json()
     for (const issue of data.issues || []) {
       const parentKey = issue.fields?.parent?.key
-      if (parentKey) {
+      if (parentKey && !isWonTDoIssue(issue)) {
         subtasksMap[parentKey] = (subtasksMap[parentKey] || 0) + 1
       }
     }
