@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { Check, ChevronDown, RotateCcw, Rocket, SlidersHorizontal } from 'lucide-react'
 import { statusStyle } from '../lib/tokens.js'
 
 const EMPTY = { project: '', sprint: '', year: '', quarter: '', status: '', review: '', tc: '', td: '', type: '', label: '' }
@@ -74,9 +74,14 @@ function MultiSelect({ label, value, onChange, options, render = (o) => o, optio
   )
 }
 
-export default function Filters({ options, applied, onApply, onProjectChange }) {
+export default function Filters({ options, applied, onApply, onProjectChange, sprintAnalysis = [] }) {
   const [draft, setDraft] = useState(applied)
   useEffect(() => setDraft(applied), [applied])
+
+  const gopCurrentSprint = useMemo(
+    () => sprintAnalysis.find((d) => d.project === 'GOP' && d.sprintName)?.sprintName || '',
+    [sprintAnalysis]
+  )
 
   const set = (k) => (e) => {
     const newVal = e.target.value
@@ -92,6 +97,14 @@ export default function Filters({ options, applied, onApply, onProjectChange }) 
     setDraft(EMPTY)
     onProjectChange?.('')
     onApply(EMPTY)
+  }
+
+  const setGopCurrentSprint = () => {
+    if (!gopCurrentSprint) return
+    const next = { ...draft, project: 'GOP', sprint: gopCurrentSprint }
+    setDraft(next)
+    onProjectChange?.('GOP')
+    onApply(next)
   }
 
   const levels = ['1', '2', '3']
@@ -119,7 +132,14 @@ export default function Filters({ options, applied, onApply, onProjectChange }) 
         <MultiSelect label="Test Design" value={draft.td} onChange={set('td')} options={levels} render={(l) => `TD ${l}`} panelClassName="min-w-44" />
         <MultiSelect label="Label" value={draft.label} onChange={set('label')} options={FIXED_LABELS} />
       </div>
-      <div className="flex justify-end gap-2 mt-3">
+      <div className="flex flex-wrap justify-end gap-2 mt-3">
+        <button
+          onClick={setGopCurrentSprint}
+          disabled={!gopCurrentSprint}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-amber-200 dark:border-amber-500/20 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <Rocket size={14} /> GOP hiện tại
+        </button>
         <button
           onClick={reset}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
