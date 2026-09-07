@@ -132,13 +132,15 @@ export default function App() {
         </div>
 
         {/* Global filters (§3) */}
-        <Filters
-          options={options}
-          applied={filters}
-          onApply={setFilters}
-          onProjectChange={loadFilterOptions}
-          sprintAnalysis={sprintAnalysis}
-        />
+        {tab !== 'bug-backlog' && (
+          <Filters
+            options={options}
+            applied={filters}
+            onApply={setFilters}
+            onProjectChange={loadFilterOptions}
+            sprintAnalysis={sprintAnalysis}
+          />
+        )}
 
         {/* Tab content */}
         {!kpi ? (

@@ -176,14 +176,6 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-        <StatCard icon={Bug} label="Tổng bug" value={total} tone="bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400" />
-        <StatCard icon={Clock3} label="Todo" value={statusStats.Todo} tone="bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-300" />
-        <StatCard icon={PlayCircle} label="In Progress" value={statusStats['In Progress']} tone="bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300" />
-        <StatCard icon={ClipboardCheck} label="Ready to Test" value={statusStats['Ready to Test']} tone="bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300" />
-        <StatCard icon={CheckCircle2} label="Done" value={statusStats.Done} tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300" />
-      </div>
-
       <Panel title="Bộ lọc backlog" right={<Badge className="bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300">{filtered.length}/{total}</Badge>}>
         <div className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
@@ -246,6 +238,14 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
                 </span>
               </button>
             ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 pt-2">
+            <StatCard icon={Bug} label="Tổng bug" value={total} tone="bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400" />
+            <StatCard icon={Clock3} label="Todo" value={statusStats.Todo} tone="bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-300" />
+            <StatCard icon={PlayCircle} label="In Progress" value={statusStats['In Progress']} tone="bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300" />
+            <StatCard icon={ClipboardCheck} label="Ready to Test" value={statusStats['Ready to Test']} tone="bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300" />
+            <StatCard icon={CheckCircle2} label="Done" value={statusStats.Done} tone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300" />
           </div>
         </div>
       </Panel>
