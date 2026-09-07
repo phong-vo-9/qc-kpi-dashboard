@@ -1,7 +1,7 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
-import { fetchTasks, fetchActiveSprint } from './jira.js'
-import { saveTasks, getTasks, getMeta } from './db.js'
+import { fetchTasks, fetchActiveSprint, fetchBugBacklog } from './jira.js'
+import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
 const app = express()
@@ -65,10 +65,18 @@ function applyFilters(tasks, q = {}) {
 app.post('/api/refresh', async (req, res) => {
   try {
     const proj = req.query.project
+    const backlogProject = process.env.JIRA_PROJECT || 'GOP'
     if (proj) {
       const tasks = await fetchTasks(proj)
       saveTasks(tasks, proj)
-      res.json({ count: tasks.length, lastRefresh: getMeta('lastRefresh') })
+      try {
+        const bugBacklog = await fetchBugBacklog(backlogProject)
+        saveBugBacklog(bugBacklog, backlogProject)
+        res.json({ count: tasks.length, backlogCount: bugBacklog.length, lastRefresh: getMeta('lastRefresh') })
+      } catch (bugErr) {
+        console.error(`Error fetching bug backlog for ${backlogProject}:`, bugErr.message)
+        res.json({ count: tasks.length, backlogCount: 0, backlogError: bugErr.message, lastRefresh: getMeta('lastRefresh') })
+      }
     } else {
       const projectsToFetch = ['GOP', 'AW']
       let allTasks = []
@@ -81,7 +89,14 @@ app.post('/api/refresh', async (req, res) => {
         }
       }
       saveTasks(allTasks)
-      res.json({ count: allTasks.length, lastRefresh: getMeta('lastRefresh') })
+      try {
+        const bugBacklog = await fetchBugBacklog(backlogProject)
+        saveBugBacklog(bugBacklog, backlogProject)
+        res.json({ count: allTasks.length, backlogCount: bugBacklog.length, lastRefresh: getMeta('lastRefresh') })
+      } catch (bugErr) {
+        console.error(`Error fetching bug backlog for ${backlogProject}:`, bugErr.message)
+        res.json({ count: allTasks.length, backlogCount: 0, backlogError: bugErr.message, lastRefresh: getMeta('lastRefresh') })
+      }
     }
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -90,6 +105,13 @@ app.post('/api/refresh', async (req, res) => {
 
 app.get('/api/tasks', (req, res) => {
   res.json(applyFilters(getTasks(), req.query))
+})
+
+app.get('/api/bug-backlog', (req, res) => {
+  const all = getBugBacklog().map(decorate)
+  const selectedProjects = splitMultiValue(req.query.project)
+  const rows = selectedProjects.length ? all.filter((x) => selectedProjects.includes(x.project)) : all
+  res.json(rows)
 })
 
 app.get('/api/kpi', (req, res) => {

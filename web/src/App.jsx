@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import { LayoutDashboard, Table2, Bug } from 'lucide-react'
+import { LayoutDashboard, Table2, Bug, Layers3 } from 'lucide-react'
 import Header from './components/Header.jsx'
 import Filters, { EMPTY_FILTERS } from './components/Filters.jsx'
 import { Skeleton } from './components/ui.jsx'
 import Overview from './tabs/Overview.jsx'
 import Tasks from './tabs/Tasks.jsx'
 import Bugs from './tabs/Bugs.jsx'
+import BugBacklog from './tabs/BugBacklog.jsx'
 import { api, query } from './lib/api.js'
 import { useDarkMode } from './lib/useDarkMode.js'
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
   { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
+  { id: 'bug-backlog', label: 'Quản lý bug backlog', icon: Layers3 },
 ]
 
 function LoadingSkeleton() {
@@ -37,6 +39,7 @@ export default function App() {
   const [options, setOptions] = useState({ projects: [], sprints: [], years: [], quarters: [], statuses: [], types: [], labels: [] })
   const [kpi, setKpi] = useState(null)
   const [tasks, setTasks] = useState([])
+  const [bugBacklog, setBugBacklog] = useState([])
   const [meta, setMeta] = useState({})
   const [sprintAnalysis, setSprintAnalysis] = useState([])
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
@@ -51,11 +54,12 @@ export default function App() {
   const load = useCallback(async () => {
     const q = query(filters)
     const filterQ = filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''
-    const [k, t, o, m, sa] = await Promise.all([
+    const [k, t, o, m, sa, backlog] = await Promise.all([
       api(`/api/kpi?${q}`), api(`/api/tasks?${q}`), api(`/api/filters${filterQ}`), api('/api/meta'),
       api('/api/sprint-analysis').catch(() => []),
+      api('/api/bug-backlog').catch(() => []),
     ])
-    setKpi(k); setTasks(t); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : [])
+    setKpi(k); setTasks(t); setBugBacklog(Array.isArray(backlog) ? backlog : []); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : [])
   }, [filters])
 
   const handleNavigateToTask = (key) => {
@@ -143,8 +147,10 @@ export default function App() {
           <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} /></div>
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
-        ) : (
+        ) : tab === 'bugs' ? (
           <Bugs tasks={tasks} highlightKey={highlightKey} onNavigateToTask={handleNavigateToTask} />
+        ) : (
+          <BugBacklog bugs={bugBacklog} highlightKey={highlightKey} />
         )}
       </main>
     </div>
