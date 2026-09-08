@@ -129,7 +129,7 @@ function SprintCountdown({ startDate, endDate }) {
   )
 }
 
-function SprintAlerts({ sprintMeta, missingDue, overdueDue, totalTasks, doneTasks }) {
+function SprintAlerts({ sprintMeta, missingEnd, overdueEnd, missingDue, overdueDue, totalTasks, doneTasks }) {
   const alerts = []
   if (sprintMeta?.endDate) {
     const now = new Date()
@@ -139,6 +139,8 @@ function SprintAlerts({ sprintMeta, missingDue, overdueDue, totalTasks, doneTask
     else if (daysLeft <= 1) alerts.push({ type: 'error', msg: `Sprint kết thúc hôm nay / ngày mai!` })
     else if (daysLeft <= 3) alerts.push({ type: 'warn', msg: `Sprint sắp kết thúc — còn ${daysLeft} ngày` })
   }
+  if (overdueEnd > 0) alerts.push({ type: 'warn', msg: `${overdueEnd} task trễ end date` })
+  if (missingEnd > 0) alerts.push({ type: 'info', msg: `${missingEnd} task thiếu end date` })
   if (overdueDue > 0) alerts.push({ type: 'warn', msg: `${overdueDue} task trễ due date` })
   if (missingDue > 0) alerts.push({ type: 'info', msg: `${missingDue} task thiếu due date` })
   const remaining = totalTasks - doneTasks
@@ -249,6 +251,8 @@ function SprintProjectCard({ data }) {
       {/* Alerts */}
       <SprintAlerts
         sprintMeta={data.sprintMeta}
+        missingEnd={data.missingEnd}
+        overdueEnd={data.overdueEnd}
         missingDue={data.missingDue}
         overdueDue={data.overdueDue}
         totalTasks={data.totalTasks}
@@ -407,11 +411,15 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
     { name: 'TD 1', value: testDesign.td1 }, { name: 'TD 2', value: testDesign.td2 }, { name: 'TD 3', value: testDesign.td3 },
   ]
 
-  // Calculate missing and overdue due dates for tasks (excluding Bugs)
+  // Calculate date warnings for tasks (excluding Bugs). Due date warnings are
+  // only meaningful once an End date has been set.
   const taskIssues = tasks.filter((x) => x.type === 'Task')
   const todayStr = new Date().toISOString().split('T')[0]
-  const missingDue = taskIssues.filter((x) => !x.duedate)
-  const overdueDue = taskIssues.filter((x) => x.duedate && x.duedate < todayStr && x.status !== 'Done' && x.status !== 'Released')
+  const isDone = (x) => x.status === 'Done' || x.status === 'Released'
+  const missingEnd = taskIssues.filter((x) => !x.enddate)
+  const overdueEnd = taskIssues.filter((x) => x.enddate && x.enddate < todayStr && !isDone(x))
+  const missingDue = taskIssues.filter((x) => x.enddate && !x.duedate)
+  const overdueDue = taskIssues.filter((x) => x.enddate && x.duedate && x.duedate < todayStr && !isDone(x))
 
   const specialStats = useMemo(() => {
     const targetTasks = tasks.filter((t) => t.type !== 'Bug')
@@ -471,8 +479,24 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
         </div>
       </div>
 
-      {/* Báo cáo trễ hạn */}
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* Báo cáo ngày hạn */}
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <LateReportCard
+          title="Thiếu End date"
+          icon={CalendarOff}
+          count={missingEnd.length}
+          tasks={missingEnd}
+          onNavigate={onNavigateToTask}
+          colorClass="bg-slate-50 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400"
+        />
+        <LateReportCard
+          title="Trễ End date"
+          icon={AlertTriangle}
+          count={overdueEnd.length}
+          tasks={overdueEnd}
+          onNavigate={onNavigateToTask}
+          colorClass="bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400"
+        />
         <LateReportCard
           title="Thiếu Due date"
           icon={CalendarOff}

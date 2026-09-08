@@ -2,6 +2,7 @@
 // Read-only. Supports basic auth (user + pass) or a Personal Access Token.
 
 const STATUSES = ['Todo', 'In Progress', 'Ready to Test', 'Testing', 'Done', 'Released']
+const BUG_BACKLOG_EXCLUDED_STATUSES = ['Not Reproducible', "Won't Do"]
 
 const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
@@ -32,6 +33,11 @@ function authHeader(e) {
 function buildJql(project) {
   const statuses = STATUSES.map((s) => `"${s}"`).join(', ')
   return `project = "${project}" AND issuetype in (Task, Bug, Support) AND status in (${statuses}) ORDER BY created DESC`
+}
+
+function buildBugBacklogJql(project, sprintName = 'Bug Backlog') {
+  const excluded = BUG_BACKLOG_EXCLUDED_STATUSES.map((s) => `"${s}"`).join(', ')
+  return `project = "${project}" AND issuetype = Bug AND sprint = "${sprintName}" AND status not in (${excluded}) ORDER BY updated DESC`
 }
 
 export function parseSprint(sprintFieldVal) {
@@ -170,6 +176,35 @@ async function fetchSubtasksMap(project, e, headers) {
   return subtasksMap
 }
 
+async function fetchIssuesByJql(jql, headers, subtasksMap = {}) {
+  const e = env()
+  const out = []
+  let startAt = 0
+  const maxResults = 100
+
+  while (true) {
+    const res = await fetch(`${e.url}/rest/api/2/search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ jql, fields: FIELDS, startAt, maxResults }),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Jira ${res.status}: ${text.slice(0, 300)}`)
+    }
+    const data = await res.json()
+
+    for (const issue of data.issues || []) {
+      out.push(normalize(issue, subtasksMap))
+    }
+
+    startAt += maxResults
+    if (startAt >= (data.total || 0)) break
+  }
+
+  return out
+}
+
 /**
  * Fetch the currently ACTIVE sprint for a project from Jira Agile API.
  * Only returns sprints with state=active (i.e. today is within the sprint window).
@@ -294,4 +329,17 @@ export async function fetchTasks(projectOverride) {
   }
 
   return out
+}
+
+export async function fetchBugBacklog(projectOverride) {
+  const e = env()
+  const project = projectOverride || e.project
+  const jql = buildBugBacklogJql(project)
+  const headers = {
+    Authorization: authHeader(e),
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+
+  return fetchIssuesByJql(jql, headers)
 }
