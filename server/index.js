@@ -191,7 +191,8 @@ app.get('/api/sprint-analysis', async (_req, res) => {
       if (!activeSprint) {
         results.push({ project, sprintName: null, sprintMeta: null, totalTasks: 0, doneTasks: 0,
           totalSP: 0, doneSP: 0, totalWeight: 0, doneWeight: 0, statusCounts: {},
-          environmentCounts: emptyEnvironmentCounts(), missingEnvironment: 0, missingDue: 0, overdueDue: 0 })
+          environmentCounts: emptyEnvironmentCounts(), missingEnvironment: 0,
+          missingEnd: 0, overdueEnd: 0, missingDue: 0, overdueDue: 0 })
         continue
       }
 
@@ -219,9 +220,14 @@ app.get('/api/sprint-analysis', async (_req, res) => {
       }
 
       const today = new Date().toISOString().split('T')[0]
-      const missingDue = spTasks.filter((t) => !t.duedate).length
+      const missingEnd = spTasks.filter((t) => !t.enddate).length
+      const overdueEnd = spTasks.filter(
+        (t) => t.enddate && t.enddate < today && !DONE_STATUSES.has((t.status || '').toLowerCase().trim())
+      ).length
+      // Due date is only evaluated for issues that have an End date.
+      const missingDue = spTasks.filter((t) => t.enddate && !t.duedate).length
       const overdueDue = spTasks.filter(
-        (t) => t.duedate && t.duedate < today && !DONE_STATUSES.has((t.status || '').toLowerCase().trim())
+        (t) => t.enddate && t.duedate && t.duedate < today && !DONE_STATUSES.has((t.status || '').toLowerCase().trim())
       ).length
 
       results.push({
@@ -237,6 +243,8 @@ app.get('/api/sprint-analysis', async (_req, res) => {
         statusCounts,
         environmentCounts,
         missingEnvironment,
+        missingEnd,
+        overdueEnd,
         missingDue,
         overdueDue,
       })

@@ -83,9 +83,13 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
 
   const dueDateWarnings = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0]
-    const missingDue = bugs.filter((x) => !x.duedate)
-    const overdueDue = bugs.filter((x) => x.duedate && x.duedate < todayStr && x.status !== 'Done' && x.status !== 'Released')
-    return { missingDue, overdueDue }
+    const isDone = (x) => x.status === 'Done' || x.status === 'Released'
+    const missingEnd = bugs.filter((x) => !x.enddate)
+    const overdueEnd = bugs.filter((x) => x.enddate && x.enddate < todayStr && !isDone(x))
+    // A Due date is checked only when End date exists.
+    const missingDue = bugs.filter((x) => x.enddate && !x.duedate)
+    const overdueDue = bugs.filter((x) => x.enddate && x.duedate && x.duedate < todayStr && !isDone(x))
+    return { missingEnd, overdueEnd, missingDue, overdueDue }
   }, [bugs])
 
   const filtered = useMemo(() => {
@@ -175,15 +179,31 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
   }
 
   const isOverdue = (t) => {
-    if (!t.duedate) return false
+    if (!t.enddate || !t.duedate) return false
     const todayStr = new Date().toISOString().split('T')[0]
     return t.duedate < todayStr && t.status !== 'Done' && t.status !== 'Released'
   }
 
   return (
     <div className="space-y-6">
-      <Panel title="Cảnh báo Due date" right={<AlertTriangle size={16} className="text-gray-400" />}>
-        <div className="grid md:grid-cols-2 gap-4">
+      <Panel title="Cảnh báo ngày hạn" right={<AlertTriangle size={16} className="text-gray-400" />}>
+        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <LateReportCard
+            title="Thiếu End date"
+            icon={CalendarOff}
+            count={dueDateWarnings.missingEnd.length}
+            tasks={dueDateWarnings.missingEnd}
+            onNavigate={onNavigateToTask}
+            colorClass="bg-slate-50 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400"
+          />
+          <LateReportCard
+            title="Trễ End date"
+            icon={AlertTriangle}
+            count={dueDateWarnings.overdueEnd.length}
+            tasks={dueDateWarnings.overdueEnd}
+            onNavigate={onNavigateToTask}
+            colorClass="bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400"
+          />
           <LateReportCard
             title="Thiếu Due date"
             icon={CalendarOff}

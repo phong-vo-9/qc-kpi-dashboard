@@ -194,7 +194,7 @@ export default function Tasks({ tasks, highlightKey }) {
   }
 
   const isOverdue = (t) => {
-    if (!t.duedate) return false
+    if (!t.enddate || !t.duedate) return false
     const todayStr = new Date().toISOString().split('T')[0]
     return t.duedate < todayStr && t.status !== 'Done' && t.status !== 'Released'
   }

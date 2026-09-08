@@ -160,7 +160,7 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
   const quickModules = filterModules.slice(0, 8)
 
   const isOverdue = (bug) => {
-    if (!bug.duedate) return false
+    if (!bug.enddate || !bug.duedate) return false
     const todayStr = new Date().toISOString().split('T')[0]
     return bug.duedate < todayStr && bug.bugStatus !== 'Done'
   }
