@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, ExternalLink, Inbox, AlertTriangle, Bug, CalendarOff } from 'lucide-react'
+import { Search, ExternalLink, Inbox, AlertTriangle, Bug, CalendarOff, ChevronDown } from 'lucide-react'
 import { Badge, EmptyState, Panel, Stat } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
 import { jiraUrl } from '../lib/api.js'
@@ -19,6 +19,106 @@ const TH = ({ children, className = '' }) => (
 )
 
 const PAGE_SIZES = [10, 20, 50, 100]
+
+const isFixedBug = (bug) => ['done', 'released'].includes(String(bug.status || '').trim().toLowerCase())
+
+export function GmsSprintStatsPanel({ bugs }) {
+  const [sprintsExpanded, setSprintsExpanded] = useState(false)
+  const sprintStats = useMemo(() => {
+    const grouped = new Map()
+    for (const bug of bugs) {
+      const sprint = String(bug.sprint || '').trim()
+      // GMS is a sprint prefix, not a project/module label.
+      if (!/^GMS(?:\s|$)/i.test(sprint)) continue
+      const current = grouped.get(sprint) || { sprint, total: 0, fixed: 0 }
+      current.total += 1
+      if (isFixedBug(bug)) current.fixed += 1
+      grouped.set(sprint, current)
+    }
+    return [...grouped.values()]
+      .map((item) => ({ ...item, open: item.total - item.fixed, rate: item.total ? Math.round((item.fixed / item.total) * 100) : 0 }))
+      .sort((a, b) => a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+  }, [bugs])
+
+  const totals = useMemo(() => sprintStats.reduce(
+    (acc, item) => ({ total: acc.total + item.total, fixed: acc.fixed + item.fixed }),
+    { total: 0, fixed: 0 }
+  ), [sprintStats])
+  const overallRate = totals.total ? Math.round((totals.fixed / totals.total) * 100) : 0
+
+  return (
+    <Panel
+      title="Bug GMS đã fix theo Sprint"
+      right={(
+        <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
+          {sprintStats.length} sprint
+        </Badge>
+      )}
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/5">
+          <div>
+            <div className="text-sm font-medium text-indigo-900 dark:text-indigo-200">Tiến độ fix GMS</div>
+            <div className="text-xs text-indigo-700/70 dark:text-indigo-300/70">Chỉ các sprint GMS có bug được assign cho bạn trong bộ lọc hiện tại</div>
+          </div>
+          <div className="flex items-baseline gap-1.5 text-indigo-900 dark:text-indigo-100">
+            <span className="text-2xl font-bold tabular-nums">{overallRate}%</span>
+            <span className="text-xs text-indigo-700/70 dark:text-indigo-300/70">đã fix</span>
+          </div>
+        </div>
+
+        {sprintStats.length === 0 ? (
+          <EmptyState icon={Bug} title="Chưa có sprint GMS" hint="Hãy chọn bộ lọc có bug GMS được assign cho bạn." />
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="rounded-lg bg-gray-50 px-3 py-2 dark:bg-neutral-800/70">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Tổng bug</div>
+                <div className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{totals.total}</div>
+              </div>
+              <div className="rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
+                <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">Đã fix</div>
+                <div className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{totals.fixed}</div>
+              </div>
+              <div className="rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-500/10">
+                <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80">Còn lại</div>
+                <div className="text-xl font-bold tabular-nums text-amber-700 dark:text-amber-300">{totals.total - totals.fixed}</div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSprintsExpanded((expanded) => !expanded)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200"
+              aria-expanded={sprintsExpanded}
+            >
+              {sprintsExpanded ? 'Ẩn chi tiết sprint' : 'Xem chi tiết từng sprint'}
+              <ChevronDown size={14} className={`transition-transform ${sprintsExpanded ? 'rotate-180' : ''}`} />
+            </button>
+
+            {sprintsExpanded && <div className="grid gap-2.5 md:grid-cols-2">
+              {sprintStats.map((item) => (
+                <div key={item.sprint} className="rounded-lg border border-gray-100 px-3 py-2.5 dark:border-neutral-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate text-sm font-medium text-gray-700 dark:text-gray-200" title={item.sprint}>{item.sprint}</span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{item.rate}%</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
+                    <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-500" style={{ width: `${item.rate}%` }} />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                    <span><strong className="font-semibold text-emerald-600 dark:text-emerald-400">{item.fixed}</strong> đã fix</span>
+                    <span>{item.open} còn lại / {item.total} bug</span>
+                  </div>
+                </div>
+              ))}
+            </div>}
+          </>
+        )}
+      </div>
+    </Panel>
+  )
+}
 
 function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClass }) {
   const [expanded, setExpanded] = useState(false)
@@ -186,6 +286,8 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
 
   return (
     <div className="space-y-6">
+      <GmsSprintStatsPanel bugs={bugs} />
+
       <Panel title="Cảnh báo ngày hạn" right={<AlertTriangle size={16} className="text-gray-400" />}>
         <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
           <LateReportCard
