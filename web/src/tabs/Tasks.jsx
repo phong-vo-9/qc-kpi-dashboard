@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, ExternalLink, Inbox, AlertTriangle, Star, RefreshCw, Zap } from 'lucide-react'
+import { Search, ExternalLink, Inbox, AlertTriangle, Star, RefreshCw, Zap, Bot } from 'lucide-react'
 import { Badge, EmptyState } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
 import { jiraUrl } from '../lib/api.js'
@@ -78,7 +78,7 @@ export default function Tasks({ tasks, highlightKey }) {
       setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortField(field)
-      setSortDirection(field === 'duedate' || field === 'key' ? 'asc' : 'desc')
+      setSortDirection(field === 'enddate' || field === 'duedate' || field === 'key' ? 'asc' : 'desc')
     }
   }
 
@@ -231,6 +231,7 @@ export default function Tasks({ tasks, highlightKey }) {
                   <TH>Q</TH>
                   <TH>Sprint</TH>
                   <SortableTH field="environment">Env</SortableTH>
+                  <SortableTH field="enddate">End</SortableTH>
                   <SortableTH field="duedate">Due</SortableTH>
                   <TH className="text-center">Rev</TH>
                   <TH className="text-center">TC</TH>
@@ -238,7 +239,6 @@ export default function Tasks({ tasks, highlightKey }) {
                   <SortableTH field="storyPoints" className="text-right">SP</SortableTH>
                   <SortableTH field="qcWeight" className="text-right">Weight</SortableTH>
                   <SortableTH field="bug" className="text-right">Bug</SortableTH>
-                  <SortableTH field="updated">Updated</SortableTH>
                 </tr>
               </thead>
               <tbody>
@@ -246,6 +246,7 @@ export default function Tasks({ tasks, highlightKey }) {
                   const isGoal = (t.labels || []).some(l => ['sprintgoal', 'sprint-goal'].includes(l.toLowerCase()))
                   const isDotXuat = (t.labels || []).some(l => ['độtxuất', 'đột xuất', 'dotxuat', 'dot xuat'].includes(l.toLowerCase().trim()))
                   const isRegression = (t.labels || []).some(l => ['regressiontest', 'regression test'].includes(l.toLowerCase().trim()))
+                  const isAutomation = (t.labels || []).some(l => l.toLowerCase().trim() === 'automationtest')
                   const isHighlighted = t.key === highlightKey
                   
                   return (
@@ -277,6 +278,11 @@ export default function Tasks({ tasks, highlightKey }) {
                               <RefreshCw size={11} className="stroke-[2.5]" />
                             </span>
                           )}
+                          {isAutomation && (
+                            <span className="p-0.5 rounded bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-300 flex-shrink-0 inline-flex items-center justify-center border border-cyan-100/80 dark:border-cyan-900/45 select-none" title="Automation Test">
+                              <Bot size={11} className="stroke-[2.5]" />
+                            </span>
+                          )}
                           <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer"
                             className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap text-[13.5px]">
                             {t.key} <ExternalLink size={11} />
@@ -296,6 +302,9 @@ export default function Tasks({ tasks, highlightKey }) {
                       <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap text-[13.5px]">{t.quarter || '—'}</td>
                       <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap truncate max-w-[100px] text-[13.5px]" title={t.sprint}>{t.sprint || '—'}</td>
                       <td className="py-2 px-2"><EnvironmentBadge value={t.environment} /></td>
+                      <td className="py-2 px-2 whitespace-nowrap text-[13.5px]">
+                        <span className="text-gray-500 dark:text-gray-400">{formatDateDMY(t.enddate)}</span>
+                      </td>
                       <td className="py-2 px-2 whitespace-nowrap text-[13.5px]">
                         {isOverdue(t) ? (
                           <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold">
@@ -319,7 +328,6 @@ export default function Tasks({ tasks, highlightKey }) {
                           ? <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 tabular-nums">{t.bugCount}</span>
                           : <span className="text-gray-300 dark:text-neutral-600 tabular-nums">0</span>}
                       </td>
-                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums text-[13.5px]">{formatDateDMY(t.updated)}</td>
                     </tr>
                   )
                 })}

@@ -118,14 +118,49 @@ app.get('/api/kpi', (req, res) => {
   res.json(computeAggregates(applyFilters(getTasks(), req.query)))
 })
 
+// Automation coverage intentionally ignores the Label filter so selecting
+// AutomationTest does not make the denominator equal to the automation subset.
+app.get('/api/automation-analysis', (req, res) => {
+  const filtered = applyFilters(getTasks(), { ...req.query, label: '' })
+    .filter((task) => task.type !== 'Bug' && /^GMS\s+/i.test(String(task.sprint || '').trim()))
+  const isAutomation = (task) => (task.labels || []).some(
+    (label) => String(label).trim().toLowerCase() === 'automationtest'
+  )
+  const bySprint = new Map()
+  let noSprint = 0
+  for (const task of filtered) {
+    if (!task.sprint) {
+      noSprint += 1
+      continue
+    }
+    const groupKey = `${task.project || ''}\u0000${task.sprint}`
+    if (!bySprint.has(groupKey)) bySprint.set(groupKey, { project: task.project || '', sprint: task.sprint, total: 0, automation: 0 })
+    const row = bySprint.get(groupKey)
+    row.total += 1
+    if (isAutomation(task)) row.automation += 1
+  }
+  const sprints = [...bySprint.values()]
+    .map((row) => ({ ...row, ratio: row.total ? Number(((row.automation / row.total) * 100).toFixed(1)) : 0 }))
+    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+  const total = filtered.length
+  const automation = filtered.filter(isAutomation).length
+  res.json({
+    total,
+    automation,
+    ratio: total ? Number(((automation / total) * 100).toFixed(1)) : 0,
+    noSprint,
+    sprints,
+  })
+})
+
 app.get('/api/filters', (req, res) => {
   const all = getTasks().map(decorate)
   const selectedProjects = splitMultiValue(req.query.project)
   const t = selectedProjects.length ? all.filter((x) => selectedProjects.includes(x.project)) : all
   const uniq = (arr) => [...new Set(arr.filter((v) => v !== null && v !== undefined && v !== ''))]
 
-  // Labels are fixed to only these 3 filter categories (matched with includes, case-insensitive)
-  const FIXED_LABELS = ['Sprint-Goal', 'RegressionTest', 'ĐộtXuất']
+  // Labels are fixed to these filter categories (matched with includes, case-insensitive)
+  const FIXED_LABELS = ['Sprint-Goal', 'RegressionTest', 'AutomationTest', 'ĐộtXuất']
 
   res.json({
     projects: uniq(all.map((x) => x.project)).sort(),

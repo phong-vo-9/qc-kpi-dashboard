@@ -42,6 +42,7 @@ export default function App() {
   const [bugBacklog, setBugBacklog] = useState([])
   const [meta, setMeta] = useState({})
   const [sprintAnalysis, setSprintAnalysis] = useState([])
+  const [automationAnalysis, setAutomationAnalysis] = useState(null)
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
   const [highlightKey, setHighlightKey] = useState(null)
 
@@ -54,12 +55,14 @@ export default function App() {
   const load = useCallback(async () => {
     const q = query(filters)
     const filterQ = filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''
-    const [k, t, o, m, sa, backlog] = await Promise.all([
+    const automationQ = query({ ...filters, label: '' })
+    const [k, t, o, m, sa, backlog, aa] = await Promise.all([
       api(`/api/kpi?${q}`), api(`/api/tasks?${q}`), api(`/api/filters${filterQ}`), api('/api/meta'),
       api('/api/sprint-analysis').catch(() => []),
       api('/api/bug-backlog').catch(() => []),
+      api(`/api/automation-analysis?${automationQ}`).catch(() => null),
     ])
-    setKpi(k); setTasks(t); setBugBacklog(Array.isArray(backlog) ? backlog : []); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : [])
+    setKpi(k); setTasks(t); setBugBacklog(Array.isArray(backlog) ? backlog : []); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : []); setAutomationAnalysis(aa)
   }, [filters])
 
   const handleNavigateToTask = (key) => {
@@ -146,7 +149,7 @@ export default function App() {
         {!kpi ? (
           <LoadingSkeleton />
         ) : tab === 'overview' ? (
-          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} /></div>
+          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} automationAnalysis={automationAnalysis} /></div>
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : tab === 'bugs' ? (
