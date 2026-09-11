@@ -76,6 +76,29 @@ const ENVIRONMENT_STYLE = {
   Production: { chip: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300', bar: 'bg-red-500' },
 }
 
+const STATUS_COLORS = {
+  Todo: {
+    bar: 'bg-gray-500 dark:bg-gray-400',
+    text: 'text-gray-700 dark:text-gray-300',
+    chip: 'bg-gray-100 dark:bg-gray-500/15',
+  },
+  'In Progress': {
+    bar: 'bg-orange-500 dark:bg-orange-400',
+    text: 'text-orange-700 dark:text-orange-300',
+    chip: 'bg-orange-50 dark:bg-orange-500/10',
+  },
+  Done: {
+    bar: 'bg-blue-600 dark:bg-blue-400',
+    text: 'text-blue-700 dark:text-blue-300',
+    chip: 'bg-blue-50 dark:bg-blue-500/10',
+  },
+  Released: {
+    bar: 'bg-emerald-600 dark:bg-emerald-400',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    chip: 'bg-emerald-50 dark:bg-emerald-500/10',
+  },
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
@@ -491,6 +514,7 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
   const released = status.counts['Released'] || 0
   const done = status.counts['Done'] || 0
   const hasSprints = qcWeight.bySprint && qcWeight.bySprint.length > 0
+  const statusTotal = status.list.reduce((sum, item) => sum + item.count, 0)
 
   const reviewPie = [
     { name: 'Review 1', value: review.r1 }, { name: 'Review 2', value: review.r2 }, { name: 'Review 3', value: review.r3 },
@@ -560,6 +584,59 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
 
   return (
     <div className="space-y-6">
+      {/* KPI cards — primary overview, directly below the global filters */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <KpiCard icon={ClipboardList} entity="task" label="Total Task" value={kpi.total}
+          subtitle={`Released ${released} · Done ${done}`} />
+        <KpiCard icon={ClipboardCheck} entity="review" label="Review" value={kpi.totalReview}
+          subtitle={`TB ${averages.review} / task`} tooltip="Tổng lượt Review = Review1 + Review2 + Review3" />
+        <KpiCard icon={ListChecks} entity="tc" label="Test Case" value={kpi.totalTestCase}
+          subtitle={`TB ${averages.testCase} / task`} />
+        <KpiCard icon={PencilRuler} entity="td" label="Test Design" value={kpi.totalTestDesign}
+          subtitle={`TB ${averages.testDesign} / task`} />
+        <KpiCard icon={Scale} entity="qc" label="QC Weight" value={qcWeight.total}
+          subtitle={`TB ${qcWeight.average} / task`} tooltip="Average QC Weight = Total QC Weight / Total Task" />
+        <KpiCard icon={Gauge} entity="story" label="Story Points" value={storyPoints.total}
+          subtitle={`TB ${storyPoints.average} / task`} tooltip="Average Story Points = Total Story Points / Total Task" />
+        <KpiCard icon={Bug} entity="bug" label="Bug" value={bug.total}
+          subtitle={`${bug.perTask} bug / task`} tooltip="Bug / Task = Total Bug / Total Task" />
+      </div>
+
+      {/* Compact status strip */}
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+            <span className="h-2 w-2 rounded-full bg-indigo-500" /> Trạng thái task
+          </div>
+          {statusTotal > 0 && <span className="text-xs text-gray-400">{statusTotal} task</span>}
+        </div>
+        {statusTotal > 0 ? (
+          <>
+            <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800" aria-label="Tỷ lệ trạng thái task">
+              {status.list.map((s) => {
+                const pct = (s.count / statusTotal) * 100
+                return <div key={s.status} title={`${s.status}: ${s.count} (${pct.toFixed(1)}%)`} className={`${STATUS_COLORS[s.status]?.bar || 'bg-gray-400'} transition-all duration-500`} style={{ width: `${pct}%` }} />
+              })}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+              {status.list.map((s) => {
+                const pct = (s.count / statusTotal) * 100
+                return (
+                  <div key={s.status} className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${STATUS_COLORS[s.status]?.chip || 'bg-gray-50 dark:bg-neutral-800'}`}>
+                    <span className={`h-2 w-2 rounded-full ${STATUS_COLORS[s.status]?.bar || 'bg-gray-400'}`} />
+                    <span className={STATUS_COLORS[s.status]?.text || 'text-gray-600 dark:text-gray-300'}>{s.status}</span>
+                    <span className={`font-semibold tabular-nums ${STATUS_COLORS[s.status]?.text || 'text-gray-700 dark:text-gray-200'}`}>{s.count}</span>
+                    <span className="text-gray-500 dark:text-gray-400">({pct.toFixed(1)}%)</span>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="mt-2 text-sm text-gray-400">Chưa có dữ liệu trạng thái.</div>
+        )}
+      </div>
+
       {/* Sprint panels */}
       <div className="grid gap-4 xl:grid-cols-2 items-stretch">
         <div className="min-w-0 h-full">
@@ -715,36 +792,6 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
       </Panel>
 
       <AutomationAnalysisPanel analysis={automationAnalysis} />
-
-      {/* KPI cards (§4) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        <KpiCard icon={ClipboardList} entity="task" label="Total Task" value={kpi.total}
-          subtitle={`Released ${released} · Done ${done}`} />
-        <KpiCard icon={ClipboardCheck} entity="review" label="Review" value={kpi.totalReview}
-          subtitle={`TB ${averages.review} / task`} tooltip="Tổng lượt Review = Review1 + Review2 + Review3" />
-        <KpiCard icon={ListChecks} entity="tc" label="Test Case" value={kpi.totalTestCase}
-          subtitle={`TB ${averages.testCase} / task`} />
-        <KpiCard icon={PencilRuler} entity="td" label="Test Design" value={kpi.totalTestDesign}
-          subtitle={`TB ${averages.testDesign} / task`} />
-        <KpiCard icon={Scale} entity="qc" label="QC Weight" value={qcWeight.total}
-          subtitle={`TB ${qcWeight.average} / task`} tooltip="Average QC Weight = Total QC Weight / Total Task" />
-        <KpiCard icon={Gauge} entity="story" label="Story Points" value={storyPoints.total}
-          subtitle={`TB ${storyPoints.average} / task`} tooltip="Average Story Points = Total Story Points / Total Task" />
-        <KpiCard icon={Bug} entity="bug" label="Bug" value={bug.total}
-          subtitle={`${bug.perTask} bug / task`} tooltip="Bug / Task = Total Bug / Total Task" />
-      </div>
-
-      {/* Status distribution (§17) */}
-      <Panel title="Phân bố trạng thái">
-        <div className="flex flex-wrap gap-2">
-          {status.list.length === 0 && <span className="text-sm text-gray-400">Chưa có dữ liệu</span>}
-          {status.list.map((s) => (
-            <Badge key={s.status} className={statusStyle(s.status)}>
-              {s.status} <span className="font-bold tabular-nums">{s.count}</span>
-            </Badge>
-          ))}
-        </div>
-      </Panel>
 
       {/* Progress bars per level (§5) */}
       <div className="grid md:grid-cols-3 gap-4">
