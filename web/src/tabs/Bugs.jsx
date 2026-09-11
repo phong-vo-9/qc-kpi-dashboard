@@ -20,6 +20,23 @@ const TH = ({ children, className = '' }) => (
 
 const PAGE_SIZES = [10, 20, 50, 100]
 
+const ENV_STYLE = {
+  Dev: 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300 border border-green-100 dark:border-green-500/20',
+  UAT: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 border border-sky-100 dark:border-sky-500/20',
+  Canary: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-100 dark:border-amber-500/20',
+  Staging: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300 border border-violet-100 dark:border-violet-500/20',
+  Production: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300 border border-red-100 dark:border-red-500/20',
+}
+
+function EnvironmentBadge({ value }) {
+  if (!value) return <span className="text-gray-300 dark:text-neutral-600">—</span>
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[13.5px] font-medium whitespace-nowrap ${ENV_STYLE[value] || 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300'}`}>
+      {value}
+    </span>
+  )
+}
+
 const isFixedBug = (bug) => ['done', 'released'].includes(String(bug.status || '').trim().toLowerCase())
 
 export function GmsSprintStatsPanel({ bugs }) {
@@ -398,7 +415,7 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
                     <SortableTH field="key">Bug ID</SortableTH>
                     <TH className="w-[260px] max-w-[260px]">Summary</TH>
                     <SortableTH field="status">Status</SortableTH>
-                    <SortableTH field="priority">Priority</SortableTH>
+                    <SortableTH field="environment">Env</SortableTH>
                     <SortableTH field="storyPoints" className="text-right">SP</SortableTH>
                     <SortableTH field="qcWeight" className="text-right">Weight</SortableTH>
                     <SortableTH field="project">Project</SortableTH>
@@ -426,11 +443,7 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
                         </td>
                         <td className="py-2 px-3 w-[260px] max-w-[260px] truncate text-gray-700 dark:text-gray-200" title={t.summary}>{t.summary}</td>
                         <td className="py-2 px-3"><Badge className={statusStyle(t.status)}>{t.status || '—'}</Badge></td>
-                        <td className="py-2 px-3">
-                          <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-700 dark:bg-neutral-800 dark:text-gray-300">
-                            {t.priority || '—'}
-                          </span>
-                        </td>
+                        <td className="py-2 px-3"><EnvironmentBadge value={t.environment} /></td>
                         <td className="py-2 px-3 text-right">
                           <span className="px-1.5 py-0.5 rounded text-[13.5px] font-medium bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300 tabular-nums">
                             {t.storyPoints || 0}
