@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import {
   ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
-  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap, Server
+  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap, Server, Bot, ChevronDown
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
 import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
@@ -74,6 +74,29 @@ const ENVIRONMENT_STYLE = {
   Canary: { chip: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300', bar: 'bg-amber-500' },
   Staging: { chip: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300', bar: 'bg-violet-500' },
   Production: { chip: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300', bar: 'bg-red-500' },
+}
+
+const STATUS_COLORS = {
+  Todo: {
+    bar: 'bg-gray-500 dark:bg-gray-400',
+    text: 'text-gray-700 dark:text-gray-300',
+    chip: 'bg-gray-100 dark:bg-gray-500/15',
+  },
+  'In Progress': {
+    bar: 'bg-orange-500 dark:bg-orange-400',
+    text: 'text-orange-700 dark:text-orange-300',
+    chip: 'bg-orange-50 dark:bg-orange-500/10',
+  },
+  Done: {
+    bar: 'bg-blue-600 dark:bg-blue-400',
+    text: 'text-blue-700 dark:text-blue-300',
+    chip: 'bg-blue-50 dark:bg-blue-500/10',
+  },
+  Released: {
+    bar: 'bg-emerald-600 dark:bg-emerald-400',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    chip: 'bg-emerald-50 dark:bg-emerald-500/10',
+  },
 }
 
 function formatDate(dateStr) {
@@ -394,12 +417,104 @@ function SprintEnvironmentPanel({ sprintAnalysis }) {
   )
 }
 
-export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, sprintAnalysis = [] }) {
+function AutomationAnalysisPanel({ analysis }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!analysis) {
+    return (
+      <Panel title="Phân tích Automation Task" className="h-full">
+        <div className="flex items-center gap-2 py-8 text-sm text-gray-400">
+          <Bot size={18} className="animate-pulse text-cyan-500" /> Đang tải phân tích automation...
+        </div>
+      </Panel>
+    )
+  }
+
+  const total = analysis.total || 0
+  const automation = analysis.automation || 0
+  const ratio = Number(analysis.ratio || 0)
+  const rows = analysis.sprints || []
+
+  return (
+    <Panel
+      title="Phân tích Automation Task"
+      className="overflow-hidden border-cyan-200/70 dark:border-cyan-500/20"
+      right={(
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300">
+          <Bot size={13} /> Label: AutomationTest
+        </span>
+      )}
+    >
+      <div className="mb-4 rounded-xl bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 p-4 dark:from-cyan-500/[0.08] dark:via-sky-500/[0.06] dark:to-indigo-500/[0.08]">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(#06b6d4 ${ratio}%, rgba(148,163,184,.18) 0)` }}>
+            <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-white dark:bg-neutral-900">
+              <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{ratio}%</span>
+              <span className="text-[10px] text-gray-400">bao phủ</span>
+            </div>
+          </div>
+          <div className="min-w-[180px] flex-1">
+            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
+              <Bot size={17} className="text-cyan-500" /> Automation coverage
+            </div>
+            <p className="mb-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+              Tỷ lệ task có label <span className="font-semibold text-cyan-700 dark:text-cyan-300">AutomationTest</span> trên tổng Task/Support của các sprint GMS. Không tính filter Label.
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Tổng task</div><div className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">{total}</div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Automation</div><div className="text-lg font-bold tabular-nums text-cyan-600 dark:text-cyan-300">{automation}</div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Tỷ lệ</div><div className="text-lg font-bold tabular-nums text-indigo-600 dark:text-indigo-300">{ratio}%</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200/80 px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:text-gray-300 dark:hover:bg-neutral-800/70"
+      >
+        <span>{expanded ? 'Ẩn chi tiết sprint' : `Xem chi tiết ${rows.length} sprint GMS`}</span>
+        <ChevronDown size={15} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="mt-3">
+          {rows.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400 dark:border-neutral-700">Chưa có dữ liệu sprint GMS trong phạm vi lọc.</div>
+          ) : (
+            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+              {rows.map((row) => {
+                const pct = Number(row.ratio || 0)
+                return (
+                  <div key={`${row.project}-${row.sprint}`}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {row.project && <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{row.project}</span>}
+                        <span className="min-w-0 truncate font-medium text-gray-700 dark:text-gray-200" title={row.sprint}>{row.sprint}</span>
+                      </div>
+                      <span className="shrink-0 font-semibold tabular-nums text-gray-600 dark:text-gray-300">{row.automation}/{row.total} · {pct}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
+                      <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-indigo-500 transition-all duration-700" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {analysis.noSprint > 0 && <div className="mt-3 text-[11px] text-gray-400">Chưa có sprint: <span className="font-semibold tabular-nums">{analysis.noSprint}</span> task</div>}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, sprintAnalysis = [], automationAnalysis = null }) {
   const e = ENTITY[mode]
   const { review, testCase, testDesign, ratios, averages, qcWeight, storyPoints, bug, status } = kpi
   const released = status.counts['Released'] || 0
   const done = status.counts['Done'] || 0
   const hasSprints = qcWeight.bySprint && qcWeight.bySprint.length > 0
+  const statusTotal = status.list.reduce((sum, item) => sum + item.count, 0)
 
   const reviewPie = [
     { name: 'Review 1', value: review.r1 }, { name: 'Review 2', value: review.r2 }, { name: 'Review 3', value: review.r3 },
@@ -469,6 +584,59 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
 
   return (
     <div className="space-y-6">
+      {/* KPI cards — primary overview, directly below the global filters */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+        <KpiCard icon={ClipboardList} entity="task" label="Total Task" value={kpi.total}
+          subtitle={`Released ${released} · Done ${done}`} />
+        <KpiCard icon={ClipboardCheck} entity="review" label="Review" value={kpi.totalReview}
+          subtitle={`TB ${averages.review} / task`} tooltip="Tổng lượt Review = Review1 + Review2 + Review3" />
+        <KpiCard icon={ListChecks} entity="tc" label="Test Case" value={kpi.totalTestCase}
+          subtitle={`TB ${averages.testCase} / task`} />
+        <KpiCard icon={PencilRuler} entity="td" label="Test Design" value={kpi.totalTestDesign}
+          subtitle={`TB ${averages.testDesign} / task`} />
+        <KpiCard icon={Scale} entity="qc" label="QC Weight" value={qcWeight.total}
+          subtitle={`TB ${qcWeight.average} / task`} tooltip="Average QC Weight = Total QC Weight / Total Task" />
+        <KpiCard icon={Gauge} entity="story" label="Story Points" value={storyPoints.total}
+          subtitle={`TB ${storyPoints.average} / task`} tooltip="Average Story Points = Total Story Points / Total Task" />
+        <KpiCard icon={Bug} entity="bug" label="Bug" value={bug.total}
+          subtitle={`${bug.perTask} bug / task`} tooltip="Bug / Task = Total Bug / Total Task" />
+      </div>
+
+      {/* Compact status strip */}
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+            <span className="h-2 w-2 rounded-full bg-indigo-500" /> Trạng thái task
+          </div>
+          {statusTotal > 0 && <span className="text-xs text-gray-400">{statusTotal} task</span>}
+        </div>
+        {statusTotal > 0 ? (
+          <>
+            <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800" aria-label="Tỷ lệ trạng thái task">
+              {status.list.map((s) => {
+                const pct = (s.count / statusTotal) * 100
+                return <div key={s.status} title={`${s.status}: ${s.count} (${pct.toFixed(1)}%)`} className={`${STATUS_COLORS[s.status]?.bar || 'bg-gray-400'} transition-all duration-500`} style={{ width: `${pct}%` }} />
+              })}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+              {status.list.map((s) => {
+                const pct = (s.count / statusTotal) * 100
+                return (
+                  <div key={s.status} className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${STATUS_COLORS[s.status]?.chip || 'bg-gray-50 dark:bg-neutral-800'}`}>
+                    <span className={`h-2 w-2 rounded-full ${STATUS_COLORS[s.status]?.bar || 'bg-gray-400'}`} />
+                    <span className={STATUS_COLORS[s.status]?.text || 'text-gray-600 dark:text-gray-300'}>{s.status}</span>
+                    <span className={`font-semibold tabular-nums ${STATUS_COLORS[s.status]?.text || 'text-gray-700 dark:text-gray-200'}`}>{s.count}</span>
+                    <span className="text-gray-500 dark:text-gray-400">({pct.toFixed(1)}%)</span>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="mt-2 text-sm text-gray-400">Chưa có dữ liệu trạng thái.</div>
+        )}
+      </div>
+
       {/* Sprint panels */}
       <div className="grid gap-4 xl:grid-cols-2 items-stretch">
         <div className="min-w-0 h-full">
@@ -623,35 +791,7 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
         </div>
       </Panel>
 
-      {/* KPI cards (§4) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        <KpiCard icon={ClipboardList} entity="task" label="Total Task" value={kpi.total}
-          subtitle={`Released ${released} · Done ${done}`} />
-        <KpiCard icon={ClipboardCheck} entity="review" label="Review" value={kpi.totalReview}
-          subtitle={`TB ${averages.review} / task`} tooltip="Tổng lượt Review = Review1 + Review2 + Review3" />
-        <KpiCard icon={ListChecks} entity="tc" label="Test Case" value={kpi.totalTestCase}
-          subtitle={`TB ${averages.testCase} / task`} />
-        <KpiCard icon={PencilRuler} entity="td" label="Test Design" value={kpi.totalTestDesign}
-          subtitle={`TB ${averages.testDesign} / task`} />
-        <KpiCard icon={Scale} entity="qc" label="QC Weight" value={qcWeight.total}
-          subtitle={`TB ${qcWeight.average} / task`} tooltip="Average QC Weight = Total QC Weight / Total Task" />
-        <KpiCard icon={Gauge} entity="story" label="Story Points" value={storyPoints.total}
-          subtitle={`TB ${storyPoints.average} / task`} tooltip="Average Story Points = Total Story Points / Total Task" />
-        <KpiCard icon={Bug} entity="bug" label="Bug" value={bug.total}
-          subtitle={`${bug.perTask} bug / task`} tooltip="Bug / Task = Total Bug / Total Task" />
-      </div>
-
-      {/* Status distribution (§17) */}
-      <Panel title="Phân bố trạng thái">
-        <div className="flex flex-wrap gap-2">
-          {status.list.length === 0 && <span className="text-sm text-gray-400">Chưa có dữ liệu</span>}
-          {status.list.map((s) => (
-            <Badge key={s.status} className={statusStyle(s.status)}>
-              {s.status} <span className="font-bold tabular-nums">{s.count}</span>
-            </Badge>
-          ))}
-        </div>
-      </Panel>
+      <AutomationAnalysisPanel analysis={automationAnalysis} />
 
       {/* Progress bars per level (§5) */}
       <div className="grid md:grid-cols-3 gap-4">

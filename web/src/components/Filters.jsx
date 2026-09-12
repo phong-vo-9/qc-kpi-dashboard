@@ -28,6 +28,7 @@ function MultiSelect({ label, value, onChange, options, render = (o) => o, optio
   const LABEL_COLORS = {
     'sprint-goal': 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
     regressiontest: 'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
+    automationtest: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300',
     dotxuat: 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
   }
   const defaultOptionClass = 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-300'
@@ -108,7 +109,7 @@ export default function Filters({ options, applied, onApply, onProjectChange, sp
   }
 
   const levels = ['1', '2', '3']
-  const FIXED_LABELS = ['Sprint-Goal', 'RegressionTest', 'ĐộtXuất']
+  const FIXED_LABELS = ['Sprint-Goal', 'RegressionTest', 'AutomationTest', 'ĐộtXuất']
   const typeStyle = (type) => ({
     Task: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300 border border-sky-100 dark:border-sky-500/20',
     Bug: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 border border-red-200 dark:border-red-500/20',
