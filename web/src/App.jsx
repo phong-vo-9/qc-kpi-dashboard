@@ -153,7 +153,7 @@ export default function App() {
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : tab === 'bugs' ? (
-          <Bugs tasks={tasks} highlightKey={highlightKey} onNavigateToTask={handleNavigateToTask} />
+          <Bugs tasks={tasks} highlightKey={highlightKey} onNavigateToTask={handleNavigateToTask} currentUser={qcName} />
         ) : (
           <BugBacklog bugs={bugBacklog} highlightKey={highlightKey} />
         )}
