@@ -22,6 +22,15 @@ const matchesAnyLevel = (task, prefix, filter) => {
   return selected.some((level) => task[`${prefix}${level}`])
 }
 
+// Compare labels independent of case, spaces, punctuation, and Vietnamese accents.
+// Jira labels can be entered as e.g. "RegressionTest" or "Regression Test".
+const normalizeLabel = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[đĐ]/g, 'd')
+  .toLowerCase()
+  .replace(/[^a-z0-9]/g, '')
+
 const sortStatuses = (statuses) => [
   ...STATUS_ORDER.filter((status) => statuses.includes(status)),
   ...statuses.filter((status) => !STATUS_ORDER.includes(status)).sort(),
@@ -148,6 +157,46 @@ app.get('/api/automation-analysis', (req, res) => {
     total,
     automation,
     ratio: total ? Number(((automation / total) * 100).toFixed(1)) : 0,
+    noSprint,
+    sprints,
+  })
+})
+
+// Regression coverage is measured per sprint: one RegressionTest task is enough
+// to mark the whole sprint as covered.
+app.get('/api/regression-analysis', (req, res) => {
+  const filtered = applyFilters(getTasks(), { ...req.query, label: '' })
+    .filter((task) => task.type !== 'Bug' && /^GMS\s+/i.test(String(task.sprint || '').trim()))
+  const isRegression = (task) => (task.labels || []).some(
+    (label) => normalizeLabel(label) === 'regressiontest'
+  )
+  const bySprint = new Map()
+  let noSprint = 0
+  for (const task of filtered) {
+    if (!task.sprint) {
+      noSprint += 1
+      continue
+    }
+    const groupKey = `${task.project || ''}\u0000${task.sprint}`
+    if (!bySprint.has(groupKey)) bySprint.set(groupKey, {
+      project: task.project || '',
+      sprint: task.sprint,
+      total: 0,
+      regressionTasks: 0,
+    })
+    const row = bySprint.get(groupKey)
+    row.total += 1
+    if (isRegression(task)) row.regressionTasks += 1
+  }
+  const sprints = [...bySprint.values()]
+    .map((row) => ({ ...row, covered: row.regressionTasks > 0 }))
+    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+  const coveredSprints = sprints.filter((row) => row.covered).length
+  res.json({
+    totalSprints: sprints.length,
+    coveredSprints,
+    regressionTasks: filtered.filter(isRegression).length,
+    ratio: sprints.length ? Number(((coveredSprints / sprints.length) * 100).toFixed(1)) : 0,
     noSprint,
     sprints,
   })

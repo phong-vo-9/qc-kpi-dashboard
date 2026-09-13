@@ -43,6 +43,7 @@ export default function App() {
   const [meta, setMeta] = useState({})
   const [sprintAnalysis, setSprintAnalysis] = useState([])
   const [automationAnalysis, setAutomationAnalysis] = useState(null)
+  const [regressionAnalysis, setRegressionAnalysis] = useState(null)
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
   const [highlightKey, setHighlightKey] = useState(null)
 
@@ -56,13 +57,14 @@ export default function App() {
     const q = query(filters)
     const filterQ = filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''
     const automationQ = query({ ...filters, label: '' })
-    const [k, t, o, m, sa, backlog, aa] = await Promise.all([
+    const [k, t, o, m, sa, backlog, aa, ra] = await Promise.all([
       api(`/api/kpi?${q}`), api(`/api/tasks?${q}`), api(`/api/filters${filterQ}`), api('/api/meta'),
       api('/api/sprint-analysis').catch(() => []),
       api('/api/bug-backlog').catch(() => []),
       api(`/api/automation-analysis?${automationQ}`).catch(() => null),
+      api(`/api/regression-analysis?${automationQ}`).catch(() => null),
     ])
-    setKpi(k); setTasks(t); setBugBacklog(Array.isArray(backlog) ? backlog : []); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : []); setAutomationAnalysis(aa)
+    setKpi(k); setTasks(t); setBugBacklog(Array.isArray(backlog) ? backlog : []); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : []); setAutomationAnalysis(aa); setRegressionAnalysis(ra)
   }, [filters])
 
   const handleNavigateToTask = (key) => {
@@ -149,7 +151,7 @@ export default function App() {
         {!kpi ? (
           <LoadingSkeleton />
         ) : tab === 'overview' ? (
-          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} automationAnalysis={automationAnalysis} /></div>
+          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} automationAnalysis={automationAnalysis} regressionAnalysis={regressionAnalysis} /></div>
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : tab === 'bugs' ? (

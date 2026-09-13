@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import {
   ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
-  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap, Server, Bot, ChevronDown
+  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap, Server, Bot, ChevronDown, CheckCircle2, CircleAlert
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
 import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
@@ -508,7 +508,99 @@ function AutomationAnalysisPanel({ analysis }) {
   )
 }
 
-export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, sprintAnalysis = [], automationAnalysis = null }) {
+function RegressionAnalysisPanel({ analysis }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!analysis) {
+    return (
+      <Panel title="Phân tích RegressionTest theo Sprint" className="h-full">
+        <div className="flex items-center gap-2 py-8 text-sm text-gray-400">
+          <CheckCircle2 size={18} className="animate-pulse text-violet-500" /> Đang tải phân tích RegressionTest...
+        </div>
+      </Panel>
+    )
+  }
+
+  const totalSprints = analysis.totalSprints || 0
+  const coveredSprints = analysis.coveredSprints || 0
+  const regressionTasks = analysis.regressionTasks || 0
+  const ratio = Number(analysis.ratio || 0)
+  const rows = analysis.sprints || []
+
+  return (
+    <Panel
+      title="Phân tích RegressionTest theo Sprint"
+      className="overflow-hidden border-violet-200/70 dark:border-violet-500/20"
+      right={(
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+          <CheckCircle2 size={13} /> Label: RegressionTest
+        </span>
+      )}
+    >
+      <div className="mb-4 rounded-xl bg-gradient-to-r from-violet-50 via-fuchsia-50 to-indigo-50 p-4 dark:from-violet-500/[0.08] dark:via-fuchsia-500/[0.06] dark:to-indigo-500/[0.08]">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(#8b5cf6 ${ratio}%, rgba(148,163,184,.18) 0)` }}>
+            <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-white dark:bg-neutral-900">
+              <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{ratio}%</span>
+              <span className="text-[10px] text-gray-400">sprint đạt</span>
+            </div>
+          </div>
+          <div className="min-w-[180px] flex-1">
+            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
+              <CheckCircle2 size={17} className="text-violet-500" /> Regression coverage
+            </div>
+            <p className="mb-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+              Mỗi sprint chỉ cần <span className="font-semibold text-violet-700 dark:text-violet-300">1 task</span> có label <span className="font-semibold text-violet-700 dark:text-violet-300">RegressionTest</span> là được tính đã bao phủ.
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Sprint đạt</div><div className="text-lg font-bold tabular-nums text-violet-600 dark:text-violet-300">{coveredSprints}</div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Tổng sprint</div><div className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">{totalSprints}</div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Task Regression</div><div className="text-lg font-bold tabular-nums text-indigo-600 dark:text-indigo-300">{regressionTasks}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200/80 px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:text-gray-300 dark:hover:bg-neutral-800/70"
+      >
+        <span>{expanded ? 'Ẩn chi tiết sprint' : `Xem chi tiết ${rows.length} sprint GMS`}</span>
+        <ChevronDown size={15} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="mt-3">
+          {rows.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400 dark:border-neutral-700">Chưa có dữ liệu sprint GMS trong phạm vi lọc.</div>
+          ) : (
+            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+              {rows.map((row) => (
+                <div key={`${row.project}-${row.sprint}`}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {row.covered ? <CheckCircle2 size={15} className="shrink-0 text-emerald-500" /> : <CircleAlert size={15} className="shrink-0 text-amber-500" />}
+                      {row.project && <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{row.project}</span>}
+                      <span className="min-w-0 truncate font-medium text-gray-700 dark:text-gray-200" title={row.sprint}>{row.sprint}</span>
+                    </div>
+                    <span className={`shrink-0 font-semibold tabular-nums ${row.covered ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {row.covered ? `${row.regressionTasks} task` : 'Chưa có'}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
+                    <div className={`h-full rounded-full transition-all duration-700 ${row.covered ? 'bg-gradient-to-r from-violet-400 to-indigo-500' : 'bg-amber-300 dark:bg-amber-500/60'}`} style={{ width: row.covered ? '100%' : '0%' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {analysis.noSprint > 0 && <div className="mt-3 text-[11px] text-gray-400">Chưa có sprint: <span className="font-semibold tabular-nums">{analysis.noSprint}</span> task</div>}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, sprintAnalysis = [], automationAnalysis = null, regressionAnalysis = null }) {
   const e = ENTITY[mode]
   const { review, testCase, testDesign, ratios, averages, qcWeight, storyPoints, bug, status } = kpi
   const released = status.counts['Released'] || 0
@@ -792,6 +884,7 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
       </Panel>
 
       <AutomationAnalysisPanel analysis={automationAnalysis} />
+      <RegressionAnalysisPanel analysis={regressionAnalysis} />
 
       {/* Progress bars per level (§5) */}
       <div className="grid md:grid-cols-3 gap-4">
