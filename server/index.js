@@ -59,11 +59,15 @@ function applyFilters(tasks, q = {}) {
     if (!matchesAnyLevel(t, 'review', q.review)) return false
     if (!matchesAnyLevel(t, 'tc', q.tc)) return false
     if (!matchesAnyLevel(t, 'td', q.td)) return false
+    if (q.excludeLabel) {
+      const excluded = splitMultiValue(q.excludeLabel).map(normalizeLabel).filter(Boolean)
+      if (t.labels.some((label) => excluded.some((item) => normalizeLabel(label).includes(item)))) return false
+    }
     if (q.label) {
       const filterLabels = splitMultiValue(q.label)
       // Each filter label is matched with 'includes' (case-insensitive) against task labels
       if (!filterLabels.some(fl =>
-        t.labels.some(tl => tl.toLowerCase().includes(fl.toLowerCase()))
+        t.labels.some(tl => normalizeLabel(tl).includes(normalizeLabel(fl)))
       )) return false
     }
     return true

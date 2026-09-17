@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, RotateCcw, Rocket, SlidersHorizontal } from 'lucide-react'
 import { statusStyle } from '../lib/tokens.js'
 
-const EMPTY = { project: '', sprint: '', year: '', quarter: '', status: '', review: '', tc: '', td: '', type: '', label: '' }
+const EMPTY = { project: '', sprint: '', year: '', quarter: '', status: '', review: '', tc: '', td: '', type: '', label: '', excludeLabel: '' }
 
 function MultiSelect({ label, value, onChange, options, render = (o) => o, optionClassName, panelClassName = '' }) {
   const [open, setOpen] = useState(false)
@@ -121,7 +121,7 @@ export default function Filters({ options, applied, onApply, onProjectChange, sp
       <div className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-600 dark:text-gray-300">
         <SlidersHorizontal size={15} /> Bộ lọc
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-11 gap-3">
         <MultiSelect label="Project" value={draft.project} onChange={set('project')} options={options.projects || []} panelClassName="min-w-44" />
         <MultiSelect label="Sprint" value={draft.sprint} onChange={set('sprint')} options={options.sprints || []} panelClassName="min-w-56" />
         <MultiSelect label="Year" value={draft.year} onChange={set('year')} options={options.years || []} panelClassName="min-w-36" />
@@ -132,6 +132,13 @@ export default function Filters({ options, applied, onApply, onProjectChange, sp
         <MultiSelect label="Test Case" value={draft.tc} onChange={set('tc')} options={levels} render={(l) => `TC ${l}`} panelClassName="min-w-40" />
         <MultiSelect label="Test Design" value={draft.td} onChange={set('td')} options={levels} render={(l) => `TD ${l}`} panelClassName="min-w-44" />
         <MultiSelect label="Label" value={draft.label} onChange={set('label')} options={FIXED_LABELS} />
+        <MultiSelect
+          label="Loại trừ label"
+          value={draft.excludeLabel}
+          onChange={set('excludeLabel')}
+          options={['ĐộtXuất', 'RegressionTest']}
+          panelClassName="!w-40 !min-w-40"
+        />
       </div>
       <div className="flex flex-wrap justify-end gap-2 mt-3">
         <button

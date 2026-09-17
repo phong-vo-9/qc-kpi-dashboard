@@ -14,7 +14,7 @@ const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
   { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
-  { id: 'bug-backlog', label: 'Quản lý bug backlog', icon: Layers3 },
+  { id: 'bug-backlog', label: 'Bug backlog', icon: Layers3 },
 ]
 
 function LoadingSkeleton() {
