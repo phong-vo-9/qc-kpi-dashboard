@@ -295,6 +295,8 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
 
   const total = backlog.length
   const filterModules = moduleStats.filter((m) => m.label !== UNCLASSIFIED.label)
+  const hasActiveFilters = Boolean(search || moduleFilter !== 'all' || statusFilter !== 'all')
+  const activeFilterCount = Number(Boolean(search)) + Number(moduleFilter !== 'all') + Number(statusFilter !== 'all')
 
   const isOverdue = (bug) => {
     if (!bug.enddate || !bug.duedate) return false
@@ -312,61 +314,78 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
     }
   }
 
+  const clearFilters = () => {
+    setSearch('')
+    setModuleFilter('all')
+    setStatusFilter('all')
+  }
+
   return (
     <div className="space-y-6">
-      <Panel title="Bộ lọc backlog" right={<Badge className="bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300">{filtered.length}/{total}</Badge>}>
-        <div className="space-y-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
-            <label className="relative block">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm theo bug ID, summary, assignee, reporter..."
-                className="pl-9 pr-3 py-2 w-full text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              />
+      <Panel
+        title={<span className="text-base">Bộ lọc backlog</span>}
+        right={<Badge className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 dark:bg-red-500/15 dark:text-red-300">{filtered.length} / {total} bug</Badge>}
+        className="overflow-hidden border-gray-200/80 dark:border-neutral-800/90"
+      >
+        <div className="space-y-5">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <label className="block">
+              <span className="flex h-5 items-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tìm kiếm</span>
+              <span className="relative mt-1.5 block">
+                <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Tìm theo bug ID, summary, assignee, reporter..."
+                  className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-3 text-sm text-gray-800 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-100"
+                />
+              </span>
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <Filter size={15} />
-              <select
-                value={moduleFilter}
-                onChange={(e) => setModuleFilter(e.target.value)}
-                className="w-full border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100"
-              >
-                <option value="all">Tất cả module</option>
-                {filterModules.map((m) => (
-                  <option key={m.label} value={m.label}>{m.name} ({m.count})</option>
-                ))}
-              </select>
+            <label className="block">
+              <span className="flex h-5 items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"><Filter size={14} /> Module</span>
+              <span className="mt-1.5 block">
+                <select
+                  value={moduleFilter}
+                  onChange={(e) => setModuleFilter(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-100"
+                >
+                  <option value="all">Tất cả module</option>
+                  {filterModules.map((m) => (
+                    <option key={m.label} value={m.label}>{m.name} ({m.count})</option>
+                  ))}
+                </select>
+              </span>
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <Layers3 size={15} />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100"
-              >
-                <option value="all">Tất cả trạng thái</option>
-                {BUG_STATUS_BUCKETS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+            <label className="block">
+              <span className="flex h-5 items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"><Layers3 size={14} /> Trạng thái</span>
+              <span className="mt-1.5 block">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-100"
+                >
+                  <option value="all">Tất cả trạng thái</option>
+                  {BUG_STATUS_BUCKETS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </span>
             </label>
           </div>
 
-          {(search || moduleFilter !== 'all' || statusFilter !== 'all') && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-gray-500 dark:text-gray-400">?ang l?c:</span>
-              {search && <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">T?m ki?m: {search}</Badge>}
-              {moduleFilter !== 'all' && <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">Module: {moduleFilter}</Badge>}
-              {statusFilter !== 'all' && <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">Status: {statusFilter}</Badge>}
-              <button type="button" onClick={() => { setSearch(''); setModuleFilter('all'); setStatusFilter('all') }} className="inline-flex items-center gap-1 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400">
-                <RotateCcw size={13} /> Xo? b? l?c
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10">
+              <span className="mr-1 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300"><Filter size={14} /> Đang lọc <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] dark:bg-blue-500/20">{activeFilterCount}</span></span>
+              {search && <Badge className="max-w-full bg-white text-blue-700 shadow-sm dark:bg-neutral-900 dark:text-blue-300"><span className="truncate">Tìm kiếm: {search}</span></Badge>}
+              {moduleFilter !== 'all' && <Badge className="bg-white text-blue-700 shadow-sm dark:bg-neutral-900 dark:text-blue-300">Module: {moduleFilter}</Badge>}
+              {statusFilter !== 'all' && <Badge className="bg-white text-blue-700 shadow-sm dark:bg-neutral-900 dark:text-blue-300">Trạng thái: {statusFilter}</Badge>}
+              <button type="button" onClick={clearFilters} className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-blue-600 dark:text-gray-400 dark:hover:bg-neutral-900 dark:hover:text-blue-300">
+                <RotateCcw size={13} /> Xoá bộ lọc
               </button>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 pt-2">
+          <div className="grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 md:grid-cols-2 xl:grid-cols-5 dark:border-neutral-800">
             <StatCard icon={Bug} label="Tổng bug" value={total} tone="bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400" />
             <StatCard icon={Clock3} label="Todo" value={statusStats.Todo} tone="bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-300" />
             <StatCard icon={PlayCircle} label="In Progress" value={statusStats['In Progress']} tone="bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300" />
