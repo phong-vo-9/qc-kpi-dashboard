@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Bug, Filter, Layers3, Clock3, PlayCircle, ClipboardCheck, CheckCircle2, ExternalLink, RotateCcw, GripVertical, Plus, Save, Check, Sparkles, Target, AlertCircle, X } from 'lucide-react'
+import { Search, Bug, Filter, Layers3, Clock3, PlayCircle, ClipboardCheck, CheckCircle2, ExternalLink, RotateCcw, GripVertical, Plus, Save, Check, Copy, Sparkles, Target, AlertCircle, X } from 'lucide-react'
 import { Badge, EmptyState, Panel } from '../components/ui.jsx'
 import { jiraUrl } from '../lib/api.js'
 import { statusStyle } from '../lib/tokens.js'
@@ -68,6 +68,14 @@ const storyPointsOf = (bug) => {
   return Number.isFinite(value) ? value : 0
 }
 
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#039;',
+})[character])
+
 function PlanBugCard({ bug, onRemove, onDragStart, onDragEnd, onOpen }) {
   const priority = bug.priority || 'Chưa gán'
   const priorityTone = priorityRank(priority) === 0
@@ -111,6 +119,7 @@ function PlanningBoard({ backlog, filtered }) {
   const [dragOver, setDragOver] = useState(null)
   const [saved, setSaved] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const plannedBugs = plannedKeys.map((key) => backlog.find((bug) => bug.key === key)).filter(Boolean)
   const availableBugs = filtered.filter((bug) => !plannedKeys.includes(bug.key))
@@ -121,7 +130,7 @@ function PlanningBoard({ backlog, filtered }) {
   const persist = (keys) => {
     setPlannedKeys(keys)
     try { localStorage.setItem('qc-kpi-bug-plan', JSON.stringify(keys)) } catch { /* ignore storage errors */ }
-    setSaved(false); setConfirmed(false)
+    setSaved(false); setConfirmed(false); setCopied(false)
   }
   const addBug = (key, index) => {
     if (!key || plannedKeys.includes(key)) return
@@ -159,6 +168,39 @@ function PlanningBoard({ backlog, filtered }) {
   const savePlan = () => { try { localStorage.setItem('qc-kpi-bug-plan', JSON.stringify(plannedKeys)) } catch { /* ignore */ } setSaved(true); setConfirmed(false) }
   const confirmPlan = () => { savePlan(); setConfirmed(true) }
   const openBug = (bug) => window.open(jiraUrl(bug.key), '_blank', 'noopener,noreferrer')
+  const copyPlan = async () => {
+    if (!plannedBugs.length) return
+    const planName = (sprintName.trim() || 'Sprint mới').toLocaleUpperCase('vi-VN')
+    const heading = `DANH SÁCH CÁC BUG ĐỀ XUẤT Ở ${planName}`
+    const overview = `Tổng: ${plannedBugs.length} bug · ${totalSP} SP`
+    const lines = plannedBugs.map((bug, index) => `${index + 1}. [${bug.key}](${jiraUrl(bug.key)}) - ${bug.summary || 'Không có summary'}`)
+    const text = `${heading}\n${overview}\n\n${lines.join('\n')}`
+    const htmlItems = plannedBugs.map((bug) => `<li><a href="${jiraUrl(bug.key)}">${escapeHtml(bug.key)}</a> - ${escapeHtml(bug.summary || 'Không có summary')}</li>`).join('')
+    const html = `<p><strong>${escapeHtml(heading)}</strong><br>${escapeHtml(overview)}</p><ol>${htmlItems}</ol>`
+    try {
+      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' }),
+        })])
+      } else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text)
+      else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        textarea.remove()
+      }
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2200)
+    } catch {
+      setCopied(false)
+    }
+  }
 
   return (
     <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-indigo-50 shadow-sm dark:border-blue-500/20 dark:from-blue-500/10 dark:via-neutral-900 dark:to-indigo-500/10">
@@ -176,7 +218,7 @@ function PlanningBoard({ backlog, filtered }) {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 text-sm"><div className={`font-semibold ${isOverCapacity ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}`}>{capacityValue} / {capacity} {capacityMode === 'bugs' ? 'bug' : 'SP'}</div><div className="h-1.5 w-28 overflow-hidden rounded-full bg-blue-100 dark:bg-neutral-800"><div className={`h-full rounded-full transition-all ${isOverCapacity ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(100, (capacityValue / capacity) * 100)}%` }} /></div>{isOverCapacity && <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400"><AlertCircle size={13} /> Vượt capacity</span>}</div>
-          <div className="flex items-center gap-2"><button type="button" onClick={suggest} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-500/30 dark:bg-neutral-900 dark:text-blue-300 dark:hover:bg-blue-500/10"><Sparkles size={14} /> Gợi ý bug ưu tiên</button><button type="button" onClick={savePlan} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200"><Save size={14} /> {saved ? 'Đã lưu' : 'Lưu nháp'}</button><button type="button" onClick={confirmPlan} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"><Check size={14} /> {confirmed ? 'Đã chốt' : 'Chốt kế hoạch'}</button></div>
+          <div className="flex items-center gap-2"><button type="button" onClick={suggest} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-500/30 dark:bg-neutral-900 dark:text-blue-300 dark:hover:bg-blue-500/10"><Sparkles size={14} /> Gợi ý bug ưu tiên</button><button type="button" onClick={savePlan} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200"><Save size={14} /> {saved ? 'Đã lưu' : 'Lưu nháp'}</button><button type="button" onClick={confirmPlan} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"><Check size={14} /> {confirmed ? 'Đã chốt' : 'Chốt kế hoạch'}</button><button type="button" onClick={copyPlan} disabled={!plannedBugs.length} title={plannedBugs.length ? 'Copy danh sách bug theo thứ tự ưu tiên' : 'Thêm bug vào sprint để copy danh sách'} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">{copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Đã copy' : 'Copy danh sách'}</button></div>
         </div>
       </div>
       <div className="grid gap-4 p-4 lg:grid-cols-2">
