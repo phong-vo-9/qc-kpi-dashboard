@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
-import { LayoutDashboard, Table2, Bug, Layers3 } from 'lucide-react'
+import { LayoutDashboard, Table2, Bug, Layers3, Award } from 'lucide-react'
 import Header from './components/Header.jsx'
 import Filters, { EMPTY_FILTERS } from './components/Filters.jsx'
 import { Skeleton } from './components/ui.jsx'
 import Overview from './tabs/Overview.jsx'
+import BscStats from './tabs/BscStats.jsx'
 import Tasks from './tabs/Tasks.jsx'
 import Bugs from './tabs/Bugs.jsx'
 import BugBacklog from './tabs/BugBacklog.jsx'
@@ -12,6 +13,7 @@ import { useDarkMode } from './lib/useDarkMode.js'
 
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+  { id: 'bsc', label: 'Thống kê BSC', icon: Award },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
   { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
   { id: 'bug-backlog', label: 'Bug backlog', icon: Layers3 },
@@ -137,7 +139,7 @@ export default function App() {
         </div>
 
         {/* Global filters (§3) */}
-        {tab !== 'bug-backlog' && (
+        {tab !== 'bug-backlog' && tab !== 'bsc' && (
           <Filters
             options={options}
             applied={filters}
@@ -151,7 +153,9 @@ export default function App() {
         {!kpi ? (
           <LoadingSkeleton />
         ) : tab === 'overview' ? (
-          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} automationAnalysis={automationAnalysis} regressionAnalysis={regressionAnalysis} /></div>
+          <div key={theme}><Overview kpi={kpi} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} /></div>
+        ) : tab === 'bsc' ? (
+          <div key={theme}><BscStats mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : tab === 'bugs' ? (

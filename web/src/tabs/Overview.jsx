@@ -1,13 +1,10 @@
-// Tab 1 — Tổng quan (ui.md §4–8): KPI cards, progress bars, QC Weight,
-// Bug statistics, charts.
+// Tab 1 — Tổng quan
 import { useState, useMemo } from 'react'
 import {
   ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
-  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap, Server, Bot, ChevronDown, CheckCircle2, CircleAlert
+  AlertTriangle, CalendarOff, ExternalLink, Gauge, Zap, Server, Bot, ChevronDown
 } from 'lucide-react'
-import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
-import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
-import { ENTITY, ramp, statusStyle } from '../lib/tokens.js'
+import { KpiCard, Panel, ProgressBar } from '../components/ui.jsx'
 import { jiraUrl } from '../lib/api.js'
 
 function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClass }) {
@@ -417,206 +414,144 @@ function SprintEnvironmentPanel({ sprintAnalysis }) {
   )
 }
 
-function AutomationAnalysisPanel({ analysis }) {
+function AutomationFilteredPanel({ tasks = [], onNavigateToTask }) {
   const [expanded, setExpanded] = useState(false)
-  if (!analysis) {
-    return (
-      <Panel title="Phân tích Automation Task" className="h-full">
-        <div className="flex items-center gap-2 py-8 text-sm text-gray-400">
-          <Bot size={18} className="animate-pulse text-cyan-500" /> Đang tải phân tích automation...
-        </div>
-      </Panel>
-    )
-  }
 
-  const total = analysis.total || 0
-  const automation = analysis.automation || 0
-  const ratio = Number(analysis.ratio || 0)
-  const rows = analysis.sprints || []
+  const automationTasks = useMemo(() => {
+    return tasks.filter((t) =>
+      (t.labels || []).some((l) => String(l).trim().toLowerCase() === 'automationtest')
+    )
+  }, [tasks])
+
+  const total = tasks.length
+  const autoCount = automationTasks.length
+  const ratio = total > 0 ? Number(((autoCount / total) * 100).toFixed(1)) : 0
+
+  const completed = automationTasks.filter((t) =>
+    ['done', 'released'].includes((t.status || '').toLowerCase().trim())
+  ).length
+  const totalSP = automationTasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0)
+  const totalWeight = automationTasks.reduce((sum, t) => sum + (t.qcWeight || 0), 0)
+
+  const statusCounts = useMemo(() => {
+    const counts = {}
+    for (const t of automationTasks) {
+      const s = t.status || 'Khác'
+      counts[s] = (counts[s] || 0) + 1
+    }
+    return counts
+  }, [automationTasks])
 
   return (
     <Panel
-      title="Phân tích Automation Task"
-      className="overflow-hidden border-cyan-200/70 dark:border-cyan-500/20"
+      title="Thống kê Automation Task (Theo bộ lọc hiện tại)"
       right={(
         <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300">
           <Bot size={13} /> Label: AutomationTest
         </span>
       )}
     >
-      <div className="mb-4 rounded-xl bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 p-4 dark:from-cyan-500/[0.08] dark:via-sky-500/[0.06] dark:to-indigo-500/[0.08]">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="rounded-xl bg-gradient-to-r from-cyan-50/70 via-sky-50/50 to-indigo-50/60 p-4 dark:from-cyan-500/[0.08] dark:via-sky-500/[0.06] dark:to-indigo-500/[0.08] border border-cyan-100/70 dark:border-cyan-500/15">
+        <div className="flex flex-wrap items-center gap-5">
           <div className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(#06b6d4 ${ratio}%, rgba(148,163,184,.18) 0)` }}>
-            <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-white dark:bg-neutral-900">
+            <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-white dark:bg-neutral-900 shadow-sm">
               <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{ratio}%</span>
-              <span className="text-[10px] text-gray-400">bao phủ</span>
+              <span className="text-[10px] text-gray-400">tỷ lệ</span>
             </div>
           </div>
-          <div className="min-w-[180px] flex-1">
-            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
-              <Bot size={17} className="text-cyan-500" /> Automation coverage
+
+          <div className="min-w-[200px] flex-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">
+              <Bot size={17} className="text-cyan-500" />
+              <span>Tiến độ Automation</span>
+              <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                ({autoCount}/{total} tasks trong bộ lọc)
+              </span>
             </div>
-            <p className="mb-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Tỷ lệ task có label <span className="font-semibold text-cyan-700 dark:text-cyan-300">AutomationTest</span> trên tổng Task/Support của các sprint GMS. Không tính filter Label.
-            </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Tổng task</div><div className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">{total}</div></div>
-              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Automation</div><div className="text-lg font-bold tabular-nums text-cyan-600 dark:text-cyan-300">{automation}</div></div>
-              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Tỷ lệ</div><div className="text-lg font-bold tabular-nums text-indigo-600 dark:text-indigo-300">{ratio}%</div></div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+              <div className="p-2.5 rounded-lg bg-white/70 dark:bg-neutral-900/60 border border-gray-100 dark:border-neutral-800">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400">Task Automation</div>
+                <div className="text-lg font-bold tabular-nums text-cyan-600 dark:text-cyan-400">{autoCount}</div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-white/70 dark:bg-neutral-900/60 border border-gray-100 dark:border-neutral-800">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400">Đã hoàn thành</div>
+                <div className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {completed} <span className="text-xs font-normal text-gray-400">({autoCount > 0 ? ((completed / autoCount) * 100).toFixed(0) : 0}%)</span>
+                </div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-white/70 dark:bg-neutral-900/60 border border-gray-100 dark:border-neutral-800">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400">Tổng Story Points</div>
+                <div className="text-lg font-bold tabular-nums text-indigo-600 dark:text-indigo-400">{totalSP} SP</div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-white/70 dark:bg-neutral-900/60 border border-gray-100 dark:border-neutral-800">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400">Tổng QC Weight</div>
+                <div className="text-lg font-bold tabular-nums text-violet-600 dark:text-violet-400">{totalWeight}</div>
+              </div>
             </div>
+
+            {autoCount > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5 items-center">
+                <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Trạng thái:</span>
+                {Object.entries(statusCounts).map(([st, cnt]) => (
+                  <span key={st} className="px-2 py-0.5 rounded text-[11px] font-medium bg-white/80 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 border border-gray-200/60 dark:border-neutral-700">
+                    {st}: <strong>{cnt}</strong>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200/80 px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:text-gray-300 dark:hover:bg-neutral-800/70"
-      >
-        <span>{expanded ? 'Ẩn chi tiết sprint' : `Xem chi tiết ${rows.length} sprint GMS`}</span>
-        <ChevronDown size={15} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </button>
-      {expanded && (
+      {autoCount > 0 && (
         <div className="mt-3">
-          {rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400 dark:border-neutral-700">Chưa có dữ liệu sprint GMS trong phạm vi lọc.</div>
-          ) : (
-            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
-              {rows.map((row) => {
-                const pct = Number(row.ratio || 0)
-                return (
-                  <div key={`${row.project}-${row.sprint}`}>
-                    <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                      <div className="flex min-w-0 items-center gap-2">
-                        {row.project && <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{row.project}</span>}
-                        <span className="min-w-0 truncate font-medium text-gray-700 dark:text-gray-200" title={row.sprint}>{row.sprint}</span>
-                      </div>
-                      <span className="shrink-0 font-semibold tabular-nums text-gray-600 dark:text-gray-300">{row.automation}/{row.total} · {pct}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
-                      <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-indigo-500 transition-all duration-700" style={{ width: `${pct}%` }} />
-                    </div>
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200/80 px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:text-gray-300 dark:hover:bg-neutral-800/70"
+          >
+            <span>{expanded ? 'Ẩn danh sách task Automation' : `Xem danh sách ${autoCount} task Automation`}</span>
+            <ChevronDown size={15} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+
+          {expanded && (
+            <div className="mt-2 max-h-64 overflow-y-auto space-y-1.5 divide-y divide-gray-100 dark:divide-neutral-800 text-xs">
+              {automationTasks.map((t) => (
+                <div key={t.key} className="pt-2 first:pt-0 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="font-semibold text-gray-800 dark:text-gray-200 shrink-0">{t.key}</span>
+                    <span className="text-gray-600 dark:text-gray-400 truncate" title={t.summary}>{t.summary}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-gray-300 shrink-0">{t.status}</span>
                   </div>
-                )
-              })}
-            </div>
-          )}
-          {analysis.noSprint > 0 && <div className="mt-3 text-[11px] text-gray-400">Chưa có sprint: <span className="font-semibold tabular-nums">{analysis.noSprint}</span> task</div>}
-        </div>
-      )}
-    </Panel>
-  )
-}
-
-function RegressionAnalysisPanel({ analysis }) {
-  const [expanded, setExpanded] = useState(false)
-  if (!analysis) {
-    return (
-      <Panel title="Phân tích RegressionTest theo Sprint" className="h-full">
-        <div className="flex items-center gap-2 py-8 text-sm text-gray-400">
-          <CheckCircle2 size={18} className="animate-pulse text-violet-500" /> Đang tải phân tích RegressionTest...
-        </div>
-      </Panel>
-    )
-  }
-
-  const totalSprints = analysis.totalSprints || 0
-  const coveredSprints = analysis.coveredSprints || 0
-  const regressionTasks = analysis.regressionTasks || 0
-  const ratio = Number(analysis.ratio || 0)
-  const rows = analysis.sprints || []
-
-  return (
-    <Panel
-      title="Phân tích RegressionTest theo Sprint"
-      className="overflow-hidden border-violet-200/70 dark:border-violet-500/20"
-      right={(
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
-          <CheckCircle2 size={13} /> Label: RegressionTest
-        </span>
-      )}
-    >
-      <div className="mb-4 rounded-xl bg-gradient-to-r from-violet-50 via-fuchsia-50 to-indigo-50 p-4 dark:from-violet-500/[0.08] dark:via-fuchsia-500/[0.06] dark:to-indigo-500/[0.08]">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(#8b5cf6 ${ratio}%, rgba(148,163,184,.18) 0)` }}>
-            <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-white dark:bg-neutral-900">
-              <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{ratio}%</span>
-              <span className="text-[10px] text-gray-400">sprint đạt</span>
-            </div>
-          </div>
-          <div className="min-w-[180px] flex-1">
-            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
-              <CheckCircle2 size={17} className="text-violet-500" /> Regression coverage
-            </div>
-            <p className="mb-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Mỗi sprint chỉ cần <span className="font-semibold text-violet-700 dark:text-violet-300">1 task</span> có label <span className="font-semibold text-violet-700 dark:text-violet-300">RegressionTest</span> là được tính đã bao phủ.
-            </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Sprint đạt</div><div className="text-lg font-bold tabular-nums text-violet-600 dark:text-violet-300">{coveredSprints}</div></div>
-              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Tổng sprint</div><div className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">{totalSprints}</div></div>
-              <div><div className="text-[10px] uppercase tracking-wider text-gray-400">Task Regression</div><div className="text-lg font-bold tabular-nums text-indigo-600 dark:text-indigo-300">{regressionTasks}</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200/80 px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:text-gray-300 dark:hover:bg-neutral-800/70"
-      >
-        <span>{expanded ? 'Ẩn chi tiết sprint' : `Xem chi tiết ${rows.length} sprint GMS`}</span>
-        <ChevronDown size={15} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </button>
-      {expanded && (
-        <div className="mt-3">
-          {rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400 dark:border-neutral-700">Chưa có dữ liệu sprint GMS trong phạm vi lọc.</div>
-          ) : (
-            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
-              {rows.map((row) => (
-                <div key={`${row.project}-${row.sprint}`}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {row.covered ? <CheckCircle2 size={15} className="shrink-0 text-emerald-500" /> : <CircleAlert size={15} className="shrink-0 text-amber-500" />}
-                      {row.project && <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{row.project}</span>}
-                      <span className="min-w-0 truncate font-medium text-gray-700 dark:text-gray-200" title={row.sprint}>{row.sprint}</span>
-                    </div>
-                    <span className={`shrink-0 font-semibold tabular-nums ${row.covered ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                      {row.covered ? `${row.regressionTasks} task` : 'Chưa có'}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
-                    <div className={`h-full rounded-full transition-all duration-700 ${row.covered ? 'bg-gradient-to-r from-violet-400 to-indigo-500' : 'bg-amber-300 dark:bg-amber-500/60'}`} style={{ width: row.covered ? '100%' : '0%' }} />
+                  <div className="flex items-center gap-2 shrink-0">
+                    {t.storyPoints > 0 && <span className="text-[11px] text-gray-400">{t.storyPoints} SP</span>}
+                    <button
+                      onClick={() => onNavigateToTask(t.key)}
+                      className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 font-medium"
+                    >
+                      Xem
+                    </button>
+                    <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                      <ExternalLink size={12} />
+                    </a>
                   </div>
                 </div>
               ))}
             </div>
           )}
-          {analysis.noSprint > 0 && <div className="mt-3 text-[11px] text-gray-400">Chưa có sprint: <span className="font-semibold tabular-nums">{analysis.noSprint}</span> task</div>}
         </div>
       )}
     </Panel>
   )
 }
 
-export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, sprintAnalysis = [], automationAnalysis = null, regressionAnalysis = null }) {
-  const e = ENTITY[mode]
-  const { review, testCase, testDesign, ratios, averages, qcWeight, storyPoints, bug, status } = kpi
+
+export default function Overview({ kpi, tasks = [], onNavigateToTask, sprintAnalysis = [] }) {
+  const { averages, qcWeight, storyPoints, bug, status } = kpi
   const released = status.counts['Released'] || 0
   const done = status.counts['Done'] || 0
-  const hasSprints = qcWeight.bySprint && qcWeight.bySprint.length > 0
   const statusTotal = status.list.reduce((sum, item) => sum + item.count, 0)
-
-  const reviewPie = [
-    { name: 'Review 1', value: review.r1 }, { name: 'Review 2', value: review.r2 }, { name: 'Review 3', value: review.r3 },
-  ]
-  const tcPie = [
-    { name: 'TC 1', value: testCase.tc1 }, { name: 'TC 2', value: testCase.tc2 }, { name: 'TC 3', value: testCase.tc3 },
-  ]
-  const tdPie = [
-    { name: 'TD 1', value: testDesign.td1 }, { name: 'TD 2', value: testDesign.td2 }, { name: 'TD 3', value: testDesign.td3 },
-  ]
 
   // Calculate date warnings for tasks (excluding Bugs). Due date warnings are
   // only meaningful once an End date has been set.
@@ -883,138 +818,8 @@ export default function Overview({ kpi, mode, tasks = [], onNavigateToTask, spri
         </div>
       </Panel>
 
-      <AutomationAnalysisPanel analysis={automationAnalysis} />
-      <RegressionAnalysisPanel analysis={regressionAnalysis} />
-
-      {/* Progress bars per level (§5) */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <Panel title="Review">
-          <ProgressBar label="Review 1" value={review.r1} note={`${ratios.r1} / task`} max={kpi.total} entity="review" />
-          <ProgressBar label="Review 2" value={review.r2} note={`${ratios.r2} / task`} max={kpi.total} entity="review" />
-          <ProgressBar label="Review 3" value={review.r3} note={`${ratios.r3} / task`} max={kpi.total} entity="review" />
-        </Panel>
-        <Panel title="Test Case">
-          <ProgressBar label="TC 1" value={testCase.tc1} note={`${ratios.tc1} / task`} max={kpi.total} entity="tc" />
-          <ProgressBar label="TC 2" value={testCase.tc2} note={`${ratios.tc2} / task`} max={kpi.total} entity="tc" />
-          <ProgressBar label="TC 3" value={testCase.tc3} note={`${ratios.tc3} / task`} max={kpi.total} entity="tc" />
-        </Panel>
-        <Panel title="Test Design">
-          <ProgressBar label="TD 1" value={testDesign.td1} note={`${ratios.td1} / task`} max={kpi.total} entity="td" />
-          <ProgressBar label="TD 2" value={testDesign.td2} note={`${ratios.td2} / task`} max={kpi.total} entity="td" />
-          <ProgressBar label="TD 3" value={testDesign.td3} note={`${ratios.td3} / task`} max={kpi.total} entity="td" />
-        </Panel>
-      </div>
-
-      {/* QC Weight (§6) */}
-      <Panel title="QC Weight">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-          <Stat label="Total" value={qcWeight.total} />
-          <Stat label="Average / Task" value={qcWeight.average} />
-          <Stat label="Highest" value={qcWeight.highest} />
-          <Stat label="Lowest" value={qcWeight.lowest} />
-        </div>
-        <div className={`grid gap-6 ${hasSprints ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QC Weight theo Quarter</div>
-            <BarCard data={qcWeight.byQuarter} dataKey="weight" xKey="quarter" color={e.qc} mode={mode} height={220} showLabels />
-          </div>
-          {hasSprints && (
-            <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QC Weight theo Sprint</div>
-              <BarCard data={qcWeight.bySprint} dataKey="weight" xKey="sprint" color={e.qc} mode={mode} height={220} showLabels />
-            </div>
-          )}
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Top 5 Task theo QC Weight</div>
-            <BarCard data={qcWeight.top5} dataKey="weight" xKey="key" color={e.qc} mode={mode} height={220} horizontal />
-          </div>
-        </div>
-        <div className="mt-4">
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QC Weight theo Status</div>
-          <BarCard data={qcWeight.byStatus} dataKey="weight" xKey="status" color={e.qc} mode={mode} height={220} showLabels />
-        </div>
-      </Panel>
-
-      {/* Story Points */}
-      <Panel title="Story Points">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-          <Stat label="Total" value={storyPoints.total} />
-          <Stat label="Average / Task" value={storyPoints.average} />
-          <Stat label="Highest" value={storyPoints.highest} />
-          <Stat label="Lowest" value={storyPoints.lowest} />
-        </div>
-        <div className={`grid gap-6 ${hasSprints ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Story Points theo Quarter</div>
-            <BarCard data={storyPoints.byQuarter} dataKey="points" xKey="quarter" color={e.story} mode={mode} height={220} showLabels />
-          </div>
-          {hasSprints && (
-            <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Story Points theo Sprint</div>
-              <BarCard data={storyPoints.bySprint} dataKey="points" xKey="sprint" color={e.story} mode={mode} height={220} showLabels />
-            </div>
-          )}
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Top 5 Task theo Story Points</div>
-            <BarCard data={storyPoints.top5} dataKey="points" xKey="key" color={e.story} mode={mode} height={220} horizontal />
-          </div>
-        </div>
-        <div className="mt-4">
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Story Points theo Status</div>
-          <BarCard data={storyPoints.byStatus} dataKey="points" xKey="status" color={e.story} mode={mode} height={220} showLabels />
-        </div>
-      </Panel>
-
-      {/* Bug statistics (§7) */}
-      <Panel title="Bug Statistics">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-          <Stat label="Total Bug" value={bug.total} />
-          <Stat label="Bug / Task" value={bug.perTask} />
-          <Stat label="Nhiều nhất" value={bug.highest} />
-        </div>
-        <div className={`grid gap-6 ${hasSprints ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bug Distribution</div>
-            <PieCard data={bug.distribution} colors={ramp(mode, 'bug', 4)} mode={mode} height={220} centerCaption="Task" />
-          </div>
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bug theo Quarter</div>
-            <BarCard data={bug.byQuarter} dataKey="bug" xKey="quarter" color={e.bug} mode={mode} height={220} showLabels />
-          </div>
-          {hasSprints && (
-            <div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bug theo Sprint</div>
-              <BarCard data={bug.bySprint} dataKey="bug" xKey="sprint" color={e.bug} mode={mode} height={220} showLabels />
-            </div>
-          )}
-          <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Top 5 Task nhiều Bug</div>
-            <BarCard data={bug.top5} dataKey="bug" xKey="key" color={e.bug} mode={mode} height={220} horizontal />
-          </div>
-        </div>
-      </Panel>
-
-      {/* Charts (§8) — level breakdown pies + task-by-quarter trend */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <Panel title="Review (cấp độ)"><PieCard data={reviewPie} colors={ramp(mode, 'review')} mode={mode} /></Panel>
-        <Panel title="Test Case (cấp độ)"><PieCard data={tcPie} colors={ramp(mode, 'tc')} mode={mode} /></Panel>
-        <Panel title="Test Design (cấp độ)"><PieCard data={tdPie} colors={ramp(mode, 'td')} mode={mode} /></Panel>
-      </div>
-
-      {hasSprints ? (
-        <div className="grid md:grid-cols-2 gap-4">
-          <Panel title="Task theo Quarter">
-            <LineCard data={kpi.taskByQuarter} series={[{ key: 'task', name: 'Task', color: e.task }]} xKey="quarter" mode={mode} />
-          </Panel>
-          <Panel title="Task theo Sprint">
-            <LineCard data={kpi.taskBySprint} series={[{ key: 'task', name: 'Task', color: e.task }]} xKey="sprint" mode={mode} />
-          </Panel>
-        </div>
-      ) : (
-        <Panel title="Task theo Quarter">
-          <LineCard data={kpi.taskByQuarter} series={[{ key: 'task', name: 'Task', color: e.task }]} xKey="quarter" mode={mode} />
-        </Panel>
-      )}
+      {/* Thống kê Automation Task theo điều kiện lọc hiện tại */}
+      <AutomationFilteredPanel tasks={tasks} onNavigateToTask={onNavigateToTask} />
     </div>
   )
 }
