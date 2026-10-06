@@ -1,10 +1,11 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
 import { fetchTasks, fetchActiveSprint, fetchBugBacklog } from './jira.js'
-import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta } from './db.js'
+import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
 const app = express()
+app.use(express.json())
 const PORT = process.env.PORT || 3001
 
 const splitMultiValue = (value) =>
@@ -125,6 +126,210 @@ app.get('/api/bug-backlog', (req, res) => {
   const selectedProjects = splitMultiValue(req.query.project)
   const rows = selectedProjects.length ? all.filter((x) => selectedProjects.includes(x.project)) : all
   res.json(rows)
+})
+
+// Clear Doc APIs
+app.get('/api/clear-docs', (req, res) => {
+  try {
+    const docs = getClearDocs(req.query)
+    res.json(docs)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/clear-docs', (req, res) => {
+  try {
+    const doc = req.body
+    if (!doc.id) {
+      doc.id = 'cd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+    }
+    saveClearDoc(doc)
+    res.json({ success: true, doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/clear-docs/:id', (req, res) => {
+  try {
+    const doc = { ...req.body, id: req.params.id }
+    saveClearDoc(doc)
+    res.json({ success: true, doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/clear-docs/:id', (req, res) => {
+  try {
+    deleteClearDoc(req.params.id)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/clear-docs/task-status', (req, res) => {
+  try {
+    const statuses = getClearDocTaskStatuses()
+    res.json(statuses)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/clear-docs/task-status', (req, res) => {
+  try {
+    const { taskKey, status, note, remove } = req.body
+    if (!taskKey) return res.status(400).json({ error: 'taskKey is required' })
+    if (remove) {
+      deleteClearDocTaskStatus(taskKey)
+    } else {
+      setClearDocTaskStatus(taskKey, status || 'not_needed', note || '')
+    }
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// AI Parse Clear Doc endpoint
+app.post('/api/ai/parse-clear-doc', (req, res) => {
+  try {
+    const { text } = req.body
+    if (!text) return res.status(400).json({ error: 'text is required' })
+
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+    const taskKeys = []
+    let threadTitle = ''
+    let threadUrl = ''
+    const issueLines = []
+    let foundThreadLink = false
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const jiraLinkMatch = line.match(/^\[([A-Z0-9]+-\d+)\]\((https?:\/\/[^\s\)]+)\)/i)
+      const browseLinkMatch = line.match(/^https?:\/\/[^\s]+\/browse\/([A-Z0-9]+-\d+)/i)
+      const plainTaskKeyMatch = line.match(/^([A-Z0-9]+-\d+)(?:\s*[:\-–]\s*(.*))?$/i)
+
+      if (jiraLinkMatch) {
+        const key = jiraLinkMatch[1].toUpperCase()
+        if (!taskKeys.includes(key)) taskKeys.push(key)
+        continue
+      }
+      if (browseLinkMatch) {
+        const key = browseLinkMatch[1].toUpperCase()
+        if (!taskKeys.includes(key)) taskKeys.push(key)
+        continue
+      }
+      if (plainTaskKeyMatch) {
+        const key = plainTaskKeyMatch[1].toUpperCase()
+        if (!taskKeys.includes(key)) taskKeys.push(key)
+        continue
+      }
+
+      if (i > 0) {
+        const prevLine = lines[i - 1]
+        const wasPrevTask =
+          prevLine.match(/^\[([A-Z0-9]+-\d+)\]/i) ||
+          prevLine.match(/^https?:\/\/[^\s]+\/browse\/([A-Z0-9]+-\d+)/i) ||
+          prevLine.match(/^([A-Z0-9]+-\d+)$/i)
+        if (wasPrevTask && !line.startsWith('http') && !line.startsWith('[')) {
+          continue
+        }
+      }
+
+      const threadLinkMatch = line.match(/^\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/)
+      if (threadLinkMatch && !foundThreadLink) {
+        threadTitle = threadLinkMatch[1].trim()
+        threadUrl = threadLinkMatch[2].trim()
+        foundThreadLink = true
+        continue
+      }
+
+      if (!foundThreadLink) {
+        const plainUrlMatch = line.match(/^(https?:\/\/[^\s]+)$/)
+        if (plainUrlMatch && !plainUrlMatch[1].includes('/browse/')) {
+          threadUrl = plainUrlMatch[1]
+          if (i > 0 && !lines[i - 1].startsWith('http') && !lines[i - 1].match(/^[A-Z0-9]+-\d+/i)) {
+            threadTitle = lines[i - 1]
+          }
+          foundThreadLink = true
+          continue
+        }
+      }
+
+      issueLines.push(line)
+    }
+
+    const issues = []
+    let currentIssue = []
+    const isHeadingLine = (l) => {
+      if (/^\s*(?:\d+[\.\)]|[-*•])\s+/.test(l)) return true
+      if (/^(Về |Tác vụ |Confirm |Xác nhận |Kiểm tra |Lưu ý |Quy tắc |Behavior |Case |Phần |Mục |Q&A|Câu hỏi|Bug|Issue|Hỏi|Lỗi)/i.test(l)) return true
+      return false
+    }
+
+    for (let i = 0; i < issueLines.length; i++) {
+      const l = issueLines[i]
+      if (isHeadingLine(l)) {
+        if (currentIssue.length > 0) {
+          issues.push(currentIssue.join('\n'))
+          currentIssue = []
+        }
+        currentIssue.push(l)
+      } else {
+        currentIssue.push(l)
+      }
+    }
+    if (currentIssue.length > 0) issues.push(currentIssue.join('\n'))
+
+    const formattedContent = issues
+      .map((iss, idx) => {
+        const trimmed = iss.trim()
+        if (/^\s*\d+[\.\)]\s+/.test(trimmed)) return trimmed
+        return `${idx + 1}. ${trimmed}`
+      })
+      .join('\n\n')
+
+    const allTasks = getTasks().map(decorate)
+    const taskMap = new Map(allTasks.map(t => [t.key, t]))
+
+    let detectedProject = ''
+    let detectedSprint = ''
+    let detectedQuarter = ''
+    let detectedYear = ''
+
+    for (const k of taskKeys) {
+      const t = taskMap.get(k)
+      if (t) {
+        if (!detectedProject && t.project) detectedProject = t.project
+        if (!detectedSprint && t.sprint) detectedSprint = t.sprint
+        if (!detectedQuarter && t.quarter) detectedQuarter = t.quarter
+        if (!detectedYear && t.year) detectedYear = t.year
+      }
+    }
+
+    if (!detectedProject && taskKeys.length > 0) {
+      const m = taskKeys[0].match(/^([A-Z0-9]+)-/i)
+      if (m) detectedProject = m[1].toUpperCase()
+    }
+
+    res.json({
+      taskKeys,
+      threadTitle: threadTitle || (taskKeys.length > 0 ? `Clear doc cho ${taskKeys.join(', ')}` : 'Clear doc'),
+      threadUrl,
+      content: formattedContent || issueLines.join('\n'),
+      issueCount: issues.length > 0 ? issues.length : 1,
+      project: detectedProject || 'GOP',
+      sprint: detectedSprint || '',
+      quarter: detectedQuarter || '',
+      year: detectedYear || '',
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 app.get('/api/kpi', (req, res) => {
