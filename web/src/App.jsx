@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { LayoutDashboard, Table2, Bug, Layers3 } from 'lucide-react'
+import { LayoutDashboard, Table2, Bug, Layers3, Award, FileText } from 'lucide-react'
 import Header from './components/Header.jsx'
 import Filters, { EMPTY_FILTERS } from './components/Filters.jsx'
 import { Skeleton } from './components/ui.jsx'
 import Overview from './tabs/Overview.jsx'
+import BscStats from './tabs/BscStats.jsx'
+import ClearDoc from './tabs/ClearDoc.jsx'
 import Tasks from './tabs/Tasks.jsx'
 import Bugs from './tabs/Bugs.jsx'
 import BugBacklog from './tabs/BugBacklog.jsx'
@@ -12,9 +14,11 @@ import { useDarkMode } from './lib/useDarkMode.js'
 
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+  { id: 'bsc', label: 'Thống kê BSC', icon: Award },
+  { id: 'clear-doc', label: 'Clear doc', icon: FileText },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
   { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
-  { id: 'bug-backlog', label: 'Quản lý bug backlog', icon: Layers3 },
+  { id: 'bug-backlog', label: 'Bug backlog', icon: Layers3 },
 ]
 
 function LoadingSkeleton() {
@@ -43,6 +47,7 @@ export default function App() {
   const [meta, setMeta] = useState({})
   const [sprintAnalysis, setSprintAnalysis] = useState([])
   const [automationAnalysis, setAutomationAnalysis] = useState(null)
+  const [regressionAnalysis, setRegressionAnalysis] = useState(null)
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
   const [highlightKey, setHighlightKey] = useState(null)
 
@@ -56,13 +61,14 @@ export default function App() {
     const q = query(filters)
     const filterQ = filters.project ? `?project=${encodeURIComponent(filters.project)}` : ''
     const automationQ = query({ ...filters, label: '' })
-    const [k, t, o, m, sa, backlog, aa] = await Promise.all([
+    const [k, t, o, m, sa, backlog, aa, ra] = await Promise.all([
       api(`/api/kpi?${q}`), api(`/api/tasks?${q}`), api(`/api/filters${filterQ}`), api('/api/meta'),
       api('/api/sprint-analysis').catch(() => []),
       api('/api/bug-backlog').catch(() => []),
       api(`/api/automation-analysis?${automationQ}`).catch(() => null),
+      api(`/api/regression-analysis?${automationQ}`).catch(() => null),
     ])
-    setKpi(k); setTasks(t); setBugBacklog(Array.isArray(backlog) ? backlog : []); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : []); setAutomationAnalysis(aa)
+    setKpi(k); setTasks(t); setBugBacklog(Array.isArray(backlog) ? backlog : []); setOptions(o); setMeta(m); setSprintAnalysis(Array.isArray(sa) ? sa : []); setAutomationAnalysis(aa); setRegressionAnalysis(ra)
   }, [filters])
 
   const handleNavigateToTask = (key) => {
@@ -135,7 +141,7 @@ export default function App() {
         </div>
 
         {/* Global filters (§3) */}
-        {tab !== 'bug-backlog' && (
+        {tab !== 'bug-backlog' && tab !== 'bsc' && tab !== 'clear-doc' && (
           <Filters
             options={options}
             applied={filters}
@@ -149,11 +155,15 @@ export default function App() {
         {!kpi ? (
           <LoadingSkeleton />
         ) : tab === 'overview' ? (
-          <div key={theme}><Overview kpi={kpi} mode={mode} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} automationAnalysis={automationAnalysis} /></div>
+          <div key={theme}><Overview kpi={kpi} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} /></div>
+        ) : tab === 'bsc' ? (
+          <div key={theme}><BscStats mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
+        ) : tab === 'clear-doc' ? (
+          <div key={theme}><ClearDoc tasks={tasks} mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : tab === 'bugs' ? (
-          <Bugs tasks={tasks} highlightKey={highlightKey} onNavigateToTask={handleNavigateToTask} />
+          <Bugs tasks={tasks} highlightKey={highlightKey} onNavigateToTask={handleNavigateToTask} currentUser={qcName} />
         ) : (
           <BugBacklog bugs={bugBacklog} highlightKey={highlightKey} />
         )}

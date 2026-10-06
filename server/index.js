@@ -1,10 +1,11 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
 import { fetchTasks, fetchActiveSprint, fetchBugBacklog } from './jira.js'
-import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta } from './db.js'
+import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
 const app = express()
+app.use(express.json())
 const PORT = process.env.PORT || 3001
 
 const splitMultiValue = (value) =>
@@ -21,6 +22,15 @@ const matchesAnyLevel = (task, prefix, filter) => {
   if (selected.length === 0) return true
   return selected.some((level) => task[`${prefix}${level}`])
 }
+
+// Compare labels independent of case, spaces, punctuation, and Vietnamese accents.
+// Jira labels can be entered as e.g. "RegressionTest" or "Regression Test".
+const normalizeLabel = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[đĐ]/g, 'd')
+  .toLowerCase()
+  .replace(/[^a-z0-9]/g, '')
 
 const sortStatuses = (statuses) => [
   ...STATUS_ORDER.filter((status) => statuses.includes(status)),
@@ -50,11 +60,15 @@ function applyFilters(tasks, q = {}) {
     if (!matchesAnyLevel(t, 'review', q.review)) return false
     if (!matchesAnyLevel(t, 'tc', q.tc)) return false
     if (!matchesAnyLevel(t, 'td', q.td)) return false
+    if (q.excludeLabel) {
+      const excluded = splitMultiValue(q.excludeLabel).map(normalizeLabel).filter(Boolean)
+      if (t.labels.some((label) => excluded.some((item) => normalizeLabel(label).includes(item)))) return false
+    }
     if (q.label) {
       const filterLabels = splitMultiValue(q.label)
       // Each filter label is matched with 'includes' (case-insensitive) against task labels
       if (!filterLabels.some(fl =>
-        t.labels.some(tl => tl.toLowerCase().includes(fl.toLowerCase()))
+        t.labels.some(tl => normalizeLabel(tl).includes(normalizeLabel(fl)))
       )) return false
     }
     return true
@@ -114,6 +128,210 @@ app.get('/api/bug-backlog', (req, res) => {
   res.json(rows)
 })
 
+// Clear Doc APIs
+app.get('/api/clear-docs', (req, res) => {
+  try {
+    const docs = getClearDocs(req.query)
+    res.json(docs)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/clear-docs', (req, res) => {
+  try {
+    const doc = req.body
+    if (!doc.id) {
+      doc.id = 'cd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+    }
+    saveClearDoc(doc)
+    res.json({ success: true, doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/clear-docs/:id', (req, res) => {
+  try {
+    const doc = { ...req.body, id: req.params.id }
+    saveClearDoc(doc)
+    res.json({ success: true, doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/clear-docs/:id', (req, res) => {
+  try {
+    deleteClearDoc(req.params.id)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/clear-docs/task-status', (req, res) => {
+  try {
+    const statuses = getClearDocTaskStatuses()
+    res.json(statuses)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/clear-docs/task-status', (req, res) => {
+  try {
+    const { taskKey, status, note, remove } = req.body
+    if (!taskKey) return res.status(400).json({ error: 'taskKey is required' })
+    if (remove) {
+      deleteClearDocTaskStatus(taskKey)
+    } else {
+      setClearDocTaskStatus(taskKey, status || 'not_needed', note || '')
+    }
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// AI Parse Clear Doc endpoint
+app.post('/api/ai/parse-clear-doc', (req, res) => {
+  try {
+    const { text } = req.body
+    if (!text) return res.status(400).json({ error: 'text is required' })
+
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+    const taskKeys = []
+    let threadTitle = ''
+    let threadUrl = ''
+    const issueLines = []
+    let foundThreadLink = false
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const jiraLinkMatch = line.match(/^\[([A-Z0-9]+-\d+)\]\((https?:\/\/[^\s\)]+)\)/i)
+      const browseLinkMatch = line.match(/^https?:\/\/[^\s]+\/browse\/([A-Z0-9]+-\d+)/i)
+      const plainTaskKeyMatch = line.match(/^([A-Z0-9]+-\d+)(?:\s*[:\-–]\s*(.*))?$/i)
+
+      if (jiraLinkMatch) {
+        const key = jiraLinkMatch[1].toUpperCase()
+        if (!taskKeys.includes(key)) taskKeys.push(key)
+        continue
+      }
+      if (browseLinkMatch) {
+        const key = browseLinkMatch[1].toUpperCase()
+        if (!taskKeys.includes(key)) taskKeys.push(key)
+        continue
+      }
+      if (plainTaskKeyMatch) {
+        const key = plainTaskKeyMatch[1].toUpperCase()
+        if (!taskKeys.includes(key)) taskKeys.push(key)
+        continue
+      }
+
+      if (i > 0) {
+        const prevLine = lines[i - 1]
+        const wasPrevTask =
+          prevLine.match(/^\[([A-Z0-9]+-\d+)\]/i) ||
+          prevLine.match(/^https?:\/\/[^\s]+\/browse\/([A-Z0-9]+-\d+)/i) ||
+          prevLine.match(/^([A-Z0-9]+-\d+)$/i)
+        if (wasPrevTask && !line.startsWith('http') && !line.startsWith('[')) {
+          continue
+        }
+      }
+
+      const threadLinkMatch = line.match(/^\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/)
+      if (threadLinkMatch && !foundThreadLink) {
+        threadTitle = threadLinkMatch[1].trim()
+        threadUrl = threadLinkMatch[2].trim()
+        foundThreadLink = true
+        continue
+      }
+
+      if (!foundThreadLink) {
+        const plainUrlMatch = line.match(/^(https?:\/\/[^\s]+)$/)
+        if (plainUrlMatch && !plainUrlMatch[1].includes('/browse/')) {
+          threadUrl = plainUrlMatch[1]
+          if (i > 0 && !lines[i - 1].startsWith('http') && !lines[i - 1].match(/^[A-Z0-9]+-\d+/i)) {
+            threadTitle = lines[i - 1]
+          }
+          foundThreadLink = true
+          continue
+        }
+      }
+
+      issueLines.push(line)
+    }
+
+    const issues = []
+    let currentIssue = []
+    const isHeadingLine = (l) => {
+      if (/^\s*(?:\d+[\.\)]|[-*•])\s+/.test(l)) return true
+      if (/^(Về |Tác vụ |Confirm |Xác nhận |Kiểm tra |Lưu ý |Quy tắc |Behavior |Case |Phần |Mục |Q&A|Câu hỏi|Bug|Issue|Hỏi|Lỗi)/i.test(l)) return true
+      return false
+    }
+
+    for (let i = 0; i < issueLines.length; i++) {
+      const l = issueLines[i]
+      if (isHeadingLine(l)) {
+        if (currentIssue.length > 0) {
+          issues.push(currentIssue.join('\n'))
+          currentIssue = []
+        }
+        currentIssue.push(l)
+      } else {
+        currentIssue.push(l)
+      }
+    }
+    if (currentIssue.length > 0) issues.push(currentIssue.join('\n'))
+
+    const formattedContent = issues
+      .map((iss, idx) => {
+        const trimmed = iss.trim()
+        if (/^\s*\d+[\.\)]\s+/.test(trimmed)) return trimmed
+        return `${idx + 1}. ${trimmed}`
+      })
+      .join('\n\n')
+
+    const allTasks = getTasks().map(decorate)
+    const taskMap = new Map(allTasks.map(t => [t.key, t]))
+
+    let detectedProject = ''
+    let detectedSprint = ''
+    let detectedQuarter = ''
+    let detectedYear = ''
+
+    for (const k of taskKeys) {
+      const t = taskMap.get(k)
+      if (t) {
+        if (!detectedProject && t.project) detectedProject = t.project
+        if (!detectedSprint && t.sprint) detectedSprint = t.sprint
+        if (!detectedQuarter && t.quarter) detectedQuarter = t.quarter
+        if (!detectedYear && t.year) detectedYear = t.year
+      }
+    }
+
+    if (!detectedProject && taskKeys.length > 0) {
+      const m = taskKeys[0].match(/^([A-Z0-9]+)-/i)
+      if (m) detectedProject = m[1].toUpperCase()
+    }
+
+    res.json({
+      taskKeys,
+      threadTitle: threadTitle || (taskKeys.length > 0 ? `Clear doc cho ${taskKeys.join(', ')}` : 'Clear doc'),
+      threadUrl,
+      content: formattedContent || issueLines.join('\n'),
+      issueCount: issues.length > 0 ? issues.length : 1,
+      project: detectedProject || 'GOP',
+      sprint: detectedSprint || '',
+      quarter: detectedQuarter || '',
+      year: detectedYear || '',
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.get('/api/kpi', (req, res) => {
   res.json(computeAggregates(applyFilters(getTasks(), req.query)))
 })
@@ -152,6 +370,242 @@ app.get('/api/automation-analysis', (req, res) => {
     sprints,
   })
 })
+
+// Regression coverage is measured per sprint: one RegressionTest task is enough
+// to mark the whole sprint as covered.
+app.get('/api/regression-analysis', (req, res) => {
+  const filtered = applyFilters(getTasks(), { ...req.query, label: '' })
+    .filter((task) => task.type !== 'Bug' && /^GMS\s+/i.test(String(task.sprint || '').trim()))
+  const isRegression = (task) => (task.labels || []).some(
+    (label) => normalizeLabel(label) === 'regressiontest'
+  )
+  const bySprint = new Map()
+  let noSprint = 0
+  for (const task of filtered) {
+    if (!task.sprint) {
+      noSprint += 1
+      continue
+    }
+    const groupKey = `${task.project || ''}\u0000${task.sprint}`
+    if (!bySprint.has(groupKey)) bySprint.set(groupKey, {
+      project: task.project || '',
+      sprint: task.sprint,
+      total: 0,
+      regressionTasks: 0,
+    })
+    const row = bySprint.get(groupKey)
+    row.total += 1
+    if (isRegression(task)) row.regressionTasks += 1
+  }
+  const sprints = [...bySprint.values()]
+    .map((row) => ({ ...row, covered: row.regressionTasks > 0 }))
+    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+  const coveredSprints = sprints.filter((row) => row.covered).length
+  res.json({
+    totalSprints: sprints.length,
+    coveredSprints,
+    regressionTasks: filtered.filter(isRegression).length,
+    ratio: sprints.length ? Number(((coveredSprints / sprints.length) * 100).toFixed(1)) : 0,
+    noSprint,
+    sprints,
+  })
+})
+
+const normalizePersonName = (value) => String(value || '')
+  .trim()
+  .toLocaleLowerCase('vi')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, ' ')
+
+app.get('/api/bsc', (req, res) => {
+  const allTasks = getTasks().map(decorate)
+  const qcName = process.env.JIRA_QC_NAME || 'Nguyễn Phú Thành'
+
+  // Extract distinct available quarters from decorated tasks
+  const quartersMap = new Map()
+  for (const t of allTasks) {
+    if (t.quarter && t.year) {
+      const qKey = `${t.quarter}-${t.year}`
+      if (!quartersMap.has(qKey)) {
+        quartersMap.set(qKey, { quarter: t.quarter, year: Number(t.year), label: qKey })
+      }
+    }
+  }
+  const availableQuarters = [...quartersMap.values()].sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year
+    return b.quarter.localeCompare(a.quarter)
+  })
+
+  // Selected quarter and year
+  let selQuarter = req.query.quarter
+  let selYear = req.query.year ? Number(req.query.year) : undefined
+
+  if (!selQuarter || !selYear) {
+    if (availableQuarters.length > 0) {
+      selQuarter = availableQuarters[0].quarter
+      selYear = availableQuarters[0].year
+    } else {
+      selQuarter = 'Q3'
+      selYear = 2026
+    }
+  }
+
+  const quarterTasks = allTasks.filter((t) => t.quarter === selQuarter && t.year === selYear)
+
+  const isRegression = (task) => (task.labels || []).some(
+    (label) => normalizeLabel(label) === 'regressiontest'
+  )
+  const isAutomation = (task) => (task.labels || []).some(
+    (label) => String(label).trim().toLowerCase() === 'automationtest'
+  )
+
+  // 1. BSC Tasks: status Released, type Task & Support, excluding RegressionTest
+  const bscTasks = quarterTasks.filter((t) =>
+    t.status === 'Released' &&
+    (t.type === 'Task' || t.type === 'Support') &&
+    !isRegression(t)
+  )
+
+  // Standalone Bug issues that are Released in this quarter
+  const bugIssues = quarterTasks.filter((t) =>
+    t.status === 'Released' && t.type === 'Bug'
+  )
+
+  const aggregatesTasks = computeAggregates(bscTasks)
+  const aggregatesBugs = computeAggregates(bugIssues)
+  const aggregatesAll = computeAggregates([...bscTasks, ...bugIssues])
+
+  const totals = {
+    taskCount: bscTasks.length,
+    bugCount: bugIssues.length,
+    subtaskBugCount: aggregatesTasks.bug.total,
+    taskQcWeight: aggregatesTasks.qcWeight.total,
+    bugQcWeight: aggregatesBugs.qcWeight.total,
+    totalQcWeight: aggregatesAll.qcWeight.total,
+    taskStoryPoints: aggregatesTasks.storyPoints.total,
+    bugStoryPoints: aggregatesBugs.storyPoints.total,
+    totalStoryPoints: aggregatesAll.storyPoints.total,
+  }
+
+  // 2. Bugs
+  const isQc = (name) => {
+    const normalizedName = normalizePersonName(name)
+    const normalizedQc = normalizePersonName(qcName)
+    if (!normalizedName || !normalizedQc) return false
+    if (normalizedName === normalizedQc) return true
+    if (normalizedName.includes(normalizedQc) || normalizedQc.includes(normalizedName)) return true
+
+    const emailLocalPart = normalizedQc.split('@')[0]
+    const emailTokens = emailLocalPart.split(/[._-]+/).filter((token) => token.length >= 3)
+    if (!normalizedQc.includes('@') || emailTokens.length === 0) return false
+    const nameCompact = normalizedName.replace(/[^a-z0-9]/g, '')
+    return emailTokens.every((token) => nameCompact.includes(token))
+  }
+
+  // Bug tôi đã log trong quý (tất cả trạng thái)
+  const myLoggedBugs = quarterTasks.filter((t) =>
+    t.type === 'Bug' && isQc(t.reporter)
+  )
+
+  // Bug đã fix (assigned QC là tôi và đã Released)
+  const myFixedBugs = quarterTasks.filter((t) =>
+    t.type === 'Bug' && isQc(t.assignedQC) && t.status === 'Released'
+  )
+
+  // 3. Automation Analysis for Released tasks in this Quarter (excluding RegressionTest)
+  const releasedGmsAutoTasks = quarterTasks.filter((t) =>
+    t.status === 'Released' &&
+    t.type !== 'Bug' &&
+    !isRegression(t) &&
+    /^GMS\s+/i.test(String(t.sprint || '').trim())
+  )
+
+  const autoBySprint = new Map()
+  let autoNoSprint = 0
+  for (const task of releasedGmsAutoTasks) {
+    if (!task.sprint) {
+      autoNoSprint += 1
+      continue
+    }
+    const groupKey = `${task.project || ''}\u0000${task.sprint}`
+    if (!autoBySprint.has(groupKey)) {
+      autoBySprint.set(groupKey, { project: task.project || '', sprint: task.sprint, total: 0, automation: 0 })
+    }
+    const row = autoBySprint.get(groupKey)
+    row.total += 1
+    if (isAutomation(task)) row.automation += 1
+  }
+  const autoSprints = [...autoBySprint.values()]
+    .map((row) => ({ ...row, ratio: row.total ? Number(((row.automation / row.total) * 100).toFixed(1)) : 0 }))
+    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+
+  const autoTotal = releasedGmsAutoTasks.length
+  const autoCount = releasedGmsAutoTasks.filter(isAutomation).length
+  const automationAnalysis = {
+    total: autoTotal,
+    automation: autoCount,
+    ratio: autoTotal ? Number(((autoCount / autoTotal) * 100).toFixed(1)) : 0,
+    noSprint: autoNoSprint,
+    sprints: autoSprints,
+  }
+
+  // 4. Regression Analysis for Released tasks in this Quarter
+  const releasedGmsTasks = quarterTasks.filter((t) =>
+    t.status === 'Released' &&
+    t.type !== 'Bug' &&
+    /^GMS\s+/i.test(String(t.sprint || '').trim())
+  )
+
+  const regBySprint = new Map()
+  let regNoSprint = 0
+  for (const task of releasedGmsTasks) {
+    if (!task.sprint) {
+      regNoSprint += 1
+      continue
+    }
+    const groupKey = `${task.project || ''}\u0000${task.sprint}`
+    if (!regBySprint.has(groupKey)) {
+      regBySprint.set(groupKey, { project: task.project || '', sprint: task.sprint, total: 0, regressionTasks: 0 })
+    }
+    const row = regBySprint.get(groupKey)
+    row.total += 1
+    if (isRegression(task)) row.regressionTasks += 1
+  }
+  const regSprints = [...regBySprint.values()]
+    .map((row) => ({ ...row, covered: row.regressionTasks > 0 }))
+    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+
+  const regCoveredSprints = regSprints.filter((row) => row.covered).length
+  const regressionAnalysis = {
+    totalSprints: regSprints.length,
+    coveredSprints: regCoveredSprints,
+    regressionTasks: releasedGmsTasks.filter(isRegression).length,
+    ratio: regSprints.length ? Number(((regCoveredSprints / regSprints.length) * 100).toFixed(1)) : 0,
+    noSprint: regNoSprint,
+    sprints: regSprints,
+  }
+
+  res.json({
+    quarter: selQuarter,
+    year: selYear,
+    quarterLabel: `${selQuarter}-${selYear}`,
+    availableQuarters,
+    qcName,
+    bscTasks,
+    bugIssues,
+    aggregates: aggregatesTasks,
+    aggregatesTasks,
+    aggregatesBugs,
+    aggregatesAll,
+    totals,
+    myLoggedBugs,
+    myFixedBugs,
+    automationAnalysis,
+    regressionAnalysis,
+  })
+})
+
 
 app.get('/api/filters', (req, res) => {
   const all = getTasks().map(decorate)

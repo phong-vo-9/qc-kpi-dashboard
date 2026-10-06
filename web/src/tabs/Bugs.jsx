@@ -186,8 +186,31 @@ function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClas
   )
 }
 
-export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
+const normalizePersonName = (value) => String(value || '')
+  .trim()
+  .toLocaleLowerCase('vi')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, ' ')
+
+const isReporterCurrentUser = (reporter, currentUser) => {
+  const normalizedReporter = normalizePersonName(reporter)
+  const normalizedUser = normalizePersonName(currentUser)
+  if (!normalizedReporter || !normalizedUser) return false
+  if (normalizedReporter === normalizedUser) return true
+
+  // Jira may expose the configured account as an email while the issue field
+  // contains the display name (for example, "phuthanh.nguyen" vs "Nguyễn Phú Thành (QC)").
+  const emailLocalPart = normalizedUser.split('@')[0]
+  const emailTokens = emailLocalPart.split(/[._-]+/).filter((token) => token.length >= 3)
+  if (!normalizedUser.includes('@') || emailTokens.length === 0) return false
+  const reporterCompact = normalizedReporter.replace(/[^a-z0-9]/g, '')
+  return emailTokens.every((token) => reporterCompact.includes(token))
+}
+
+export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUser = '' }) {
   const [search, setSearch] = useState('')
+  const [showMyBugs, setShowMyBugs] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [sortField, setSortField] = useState('key')
@@ -197,6 +220,10 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
   const bugs = useMemo(() => {
     return tasks.filter((x) => x.type === 'Bug')
   }, [tasks])
+
+  const myBugCount = useMemo(() => {
+    return bugs.filter((bug) => isReporterCurrentUser(bug.reporter, currentUser)).length
+  }, [bugs, currentUser])
 
   const dueDateWarnings = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0]
@@ -211,9 +238,12 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return bugs
-    return bugs.filter((t) => t.key.toLowerCase().includes(q) || (t.summary || '').toLowerCase().includes(q))
-  }, [bugs, search])
+    const source = showMyBugs
+      ? bugs.filter((bug) => isReporterCurrentUser(bug.reporter, currentUser))
+      : bugs
+    if (!q) return source
+    return source.filter((t) => t.key.toLowerCase().includes(q) || (t.summary || '').toLowerCase().includes(q))
+  }, [bugs, currentUser, search, showMyBugs])
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -252,7 +282,7 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
     })
   }, [filtered, sortField, sortDirection])
 
-  useEffect(() => setPage(1), [search, pageSize, bugs, sortField])
+  useEffect(() => setPage(1), [search, pageSize, bugs, sortField, showMyBugs, currentUser])
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
   const start = (page - 1) * pageSize
@@ -344,13 +374,27 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
 
       {/* KPI Cards for Bugs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm p-4 flex items-center gap-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm p-4 flex items-center gap-4 transition-shadow hover:shadow-md">
           <span className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400">
             <Bug size={24} />
           </span>
-          <div>
+          <div className="min-w-0">
             <div className="text-xs text-gray-500 dark:text-gray-400">Tổng số Bug (Type)</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">{stats.total}</div>
+            <button
+              type="button"
+              onClick={() => setShowMyBugs(true)}
+              disabled={!currentUser}
+              aria-pressed={showMyBugs}
+              title="Lọc danh sách theo các bug do tôi report"
+              className={`mt-2 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showMyBugs
+                ? 'border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/20 dark:text-blue-200'
+                : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300'
+                }`}
+            >
+              <span>Bug tôi report</span>
+              <span className="rounded-full bg-white/80 px-1.5 py-0.5 tabular-nums dark:bg-neutral-900/70">{myBugCount}</span>
+            </button>
           </div>
         </div>
 
@@ -399,8 +443,24 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask }) {
               className="pl-9 pr-3 py-2 w-72 max-w-full text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             />
           </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {sorted.length} bug{sorted.length !== 1 ? 's' : ''}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowMyBugs((active) => !active)}
+              disabled={!currentUser}
+              aria-pressed={showMyBugs}
+              title={currentUser ? `Lọc các bug do ${currentUser} report` : 'Chưa cấu hình tên người dùng Jira'}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showMyBugs
+                ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+                : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20'
+                }`}
+            >
+              <Bug size={15} />
+              Bug tôi report ({myBugCount})
+            </button>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {sorted.length} bug{sorted.length !== 1 ? 's' : ''}
+            </div>
           </div>
         </div>
 
