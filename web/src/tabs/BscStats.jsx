@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   Award, ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
   Bot, CheckCircle2, CircleAlert, ChevronDown, ExternalLink, Gauge, Calendar,
-  Info, Search, RotateCcw, CircleDot, Layers, BarChart2
+  Info, Search, RotateCcw, CircleDot, Layers, BarChart2,
+  FileText, FileCheck2, HelpCircle, CheckCircle, MinusCircle, MessageSquare, Sparkles
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
 import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
@@ -66,6 +67,7 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
     myFixedBugs = [],
     automationAnalysis = {},
     regressionAnalysis = {},
+    clearDocAnalysis = {},
   } = data || {}
 
   const {
@@ -89,6 +91,25 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
     }
     return counts
   }, [bscTasks])
+
+  // Sprints GMS trong quý (chỉ tính sprint GMS theo yêu cầu)
+  const gmsSprints = useMemo(() => {
+    const set = new Set()
+    for (const t of bscTasks) {
+      const s = String(t.sprint || '').trim()
+      if (/^GMS(?:\s|$)/i.test(s)) set.add(s)
+    }
+    for (const b of myFixedBugs) {
+      const s = String(b.sprint || '').trim()
+      if (/^GMS(?:\s|$)/i.test(s)) set.add(s)
+    }
+    for (const r of (regressionAnalysis?.sprints || [])) {
+      if (r.sprint && /^GMS(?:\s|$)/i.test(r.sprint)) set.add(r.sprint)
+    }
+    return [...set]
+  }, [bscTasks, myFixedBugs, regressionAnalysis])
+
+  const totalGmsSprints = totals.gmsSprintCount || gmsSprints.length || regressionAnalysis?.totalSprints || 0
 
   // Active aggregates for QC Weight and Story Points based on selected scope (Requirement 4)
   const activeWeightAgg = useMemo(() => {
@@ -141,6 +162,21 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
 
   const [autoExpanded, setAutoExpanded] = useState(false)
   const [regExpanded, setRegExpanded] = useState(false)
+  const [clearDocExpanded, setClearDocExpanded] = useState(false)
+  const [clearDocViewMode, setClearDocViewMode] = useState('sprints') // 'sprints' | 'threads'
+  const [clearDocSearch, setClearDocSearch] = useState('')
+
+  const filteredClearDocs = useMemo(() => {
+    const list = clearDocAnalysis.docs || []
+    if (!clearDocSearch.trim()) return list
+    const q = clearDocSearch.trim().toLowerCase()
+    return list.filter((d) => {
+      const matchTitle = (d.threadTitle || '').toLowerCase().includes(q)
+      const matchContent = (d.content || '').toLowerCase().includes(q)
+      const matchTask = (d.taskKeys || []).some((k) => k.toLowerCase().includes(q))
+      return matchTitle || matchContent || matchTask
+    })
+  }, [clearDocAnalysis.docs, clearDocSearch])
 
   if (loading && !data) {
     return (
@@ -377,14 +413,17 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
 
           <div className="p-4 rounded-xl bg-indigo-50/40 dark:bg-indigo-500/[0.04] border border-indigo-100/70 dark:border-indigo-500/20">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-indigo-800 dark:text-indigo-300">Tỷ lệ Bug / Task (BSC)</span>
+              <span className="text-xs font-semibold text-indigo-800 dark:text-indigo-300">Tỷ lệ Bug / Sprint</span>
               <span className="text-2xl font-bold tabular-nums text-indigo-600 dark:text-indigo-400">
-                {totalBscTasks > 0 ? (myFixedBugs.length / totalBscTasks).toFixed(2) : 0}
+                {totalGmsSprints > 0 ? (myFixedBugs.length / totalGmsSprints).toFixed(2) : 0}
               </span>
             </div>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400">
-              Số bug đã fix trên mỗi Task Released trong quý
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+              Số bug đã fix trên mỗi Sprint trong quý
             </p>
+            <div className="text-xs text-indigo-700 dark:text-indigo-300 font-medium">
+              {myFixedBugs.length} bug / {totalGmsSprints} Sprint GMS
+            </div>
           </div>
         </div>
 
@@ -604,7 +643,286 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
         )}
       </Panel>
 
-      {/* ─── PHẦN 6: THỐNG KÊ QC WEIGHT VÀ STORY POINTS CÓ 2 LỰA CHỌN (YÊU CẦU 4) ─── */}
+      {/* ─── PHẦN 6: DỮ LIỆU TỔNG QUAN CLEAR DOC THEO QUÝ ─── */}
+      <Panel
+        title={`Tổng quan Clear Doc (${quarterLabel} - Released)`}
+        className="overflow-hidden border-emerald-200/70 dark:border-emerald-500/20"
+        right={(
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+            <FileText size={13} /> Làm rõ yêu cầu & tài liệu (Clear Doc)
+          </span>
+        )}
+      >
+        <div className="mb-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 p-4 dark:from-emerald-500/[0.08] dark:via-teal-500/[0.06] dark:to-sky-500/[0.08]">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Conic Ring Gauge */}
+            <div
+              className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full"
+              style={{ background: `conic-gradient(#10b981 ${clearDocAnalysis.coverageRate || 0}%, rgba(148,163,184,.18) 0)` }}
+            >
+              <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-white dark:bg-neutral-900 shadow-sm">
+                <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{clearDocAnalysis.coverageRate || 0}%</span>
+                <span className="text-[10px] text-gray-400">bao phủ</span>
+              </div>
+            </div>
+
+            <div className="min-w-[180px] flex-1">
+              <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
+                <FileCheck2 size={17} className="text-emerald-500" /> Tỷ lệ bao phủ Clear Doc trên Task BSC
+              </div>
+              <p className="mb-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                Tỷ lệ task có thread làm rõ tài liệu hoặc được xác nhận không cần clear trên tổng số Task/Support đã <strong>Released</strong> trong quý.
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400">Tổng Thread</div>
+                  <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">{clearDocAnalysis.totalThreads || 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400">Vấn đề đã clear</div>
+                  <div className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{clearDocAnalysis.totalIssues || 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400">TB Vấn đề / Thread</div>
+                  <div className="text-lg font-bold tabular-nums text-indigo-600 dark:text-indigo-400">{clearDocAnalysis.avgIssuesPerThread || 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400">Task đã Clear</div>
+                  <div className="text-lg font-bold tabular-nums text-teal-600 dark:text-teal-400">{clearDocAnalysis.clearedTasks || 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400">Không cần Clear</div>
+                  <div className="text-lg font-bold tabular-nums text-gray-600 dark:text-gray-300">{clearDocAnalysis.notNeededTasks || 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400">Chưa xử lý</div>
+                  <div className={`text-lg font-bold tabular-nums ${(clearDocAnalysis.pendingTasks || 0) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    {clearDocAnalysis.pendingTasks || 0}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress bar tổng quan trạng thái task */}
+          <div className="mt-4 pt-3 border-t border-emerald-100/60 dark:border-emerald-500/15">
+            <div className="mb-1.5 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+              <span className="font-medium text-gray-700 dark:text-gray-200">Tiến độ bao phủ {totalBscTasks} Task BSC</span>
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{clearDocAnalysis.coverageRate || 0}% hoàn thành</span>
+            </div>
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
+              <div
+                style={{ width: `${totalBscTasks > 0 ? ((clearDocAnalysis.clearedTasks || 0) / totalBscTasks) * 100 : 0}%` }}
+                className="bg-emerald-500 transition-all duration-700"
+                title={`Đã có Clear Doc: ${clearDocAnalysis.clearedTasks || 0} task`}
+              />
+              <div
+                style={{ width: `${totalBscTasks > 0 ? ((clearDocAnalysis.notNeededTasks || 0) / totalBscTasks) * 100 : 0}%` }}
+                className="bg-slate-400 dark:bg-neutral-600 transition-all duration-700"
+                title={`Không cần Clear Doc: ${clearDocAnalysis.notNeededTasks || 0} task`}
+              />
+              <div
+                style={{ width: `${totalBscTasks > 0 ? ((clearDocAnalysis.pendingTasks || 0) / totalBscTasks) * 100 : 0}%` }}
+                className="bg-amber-400 transition-all duration-700"
+                title={`Chưa xử lý: ${clearDocAnalysis.pendingTasks || 0} task`}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-gray-500 dark:text-gray-400">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Đã Clear: <strong>{clearDocAnalysis.clearedTasks || 0}</strong> ({totalBscTasks > 0 ? Math.round(((clearDocAnalysis.clearedTasks || 0) / totalBscTasks) * 100) : 0}%)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-neutral-600" />
+                Không cần: <strong>{clearDocAnalysis.notNeededTasks || 0}</strong> ({totalBscTasks > 0 ? Math.round(((clearDocAnalysis.notNeededTasks || 0) / totalBscTasks) * 100) : 0}%)
+              </span>
+              {(clearDocAnalysis.pendingTasks || 0) > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-semibold">
+                  <span className="h-2 w-2 rounded-full bg-amber-400" />
+                  Chưa xử lý: <strong>{clearDocAnalysis.pendingTasks || 0}</strong>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Expand / Collapse Button */}
+        <button
+          type="button"
+          onClick={() => setClearDocExpanded(!clearDocExpanded)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200/80 px-3 py-2 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:text-gray-300 dark:hover:bg-neutral-800/70"
+        >
+          <span>{clearDocExpanded ? 'Ẩn chi tiết Clear Doc' : `Xem chi tiết ${(clearDocAnalysis.sprints || []).length} sprint & ${(clearDocAnalysis.docs || []).length} thread Clear Doc`}</span>
+          <ChevronDown size={15} className={`text-gray-400 transition-transform ${clearDocExpanded ? 'rotate-180' : ''}`} />
+        </button>
+
+        {clearDocExpanded && (
+          <div className="mt-4 space-y-3">
+            {/* Sub-view switcher: Theo Sprint / Theo Thread */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-gray-100 dark:border-neutral-800">
+              <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-neutral-800 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setClearDocViewMode('sprints')}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    clearDocViewMode === 'sprints'
+                      ? 'bg-white dark:bg-neutral-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+                  }`}
+                >
+                  Theo từng Sprint ({(clearDocAnalysis.sprints || []).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClearDocViewMode('threads')}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    clearDocViewMode === 'threads'
+                      ? 'bg-white dark:bg-neutral-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+                  }`}
+                >
+                  Danh sách Thread ({(clearDocAnalysis.docs || []).length})
+                </button>
+              </div>
+
+              {clearDocViewMode === 'threads' && (
+                <div className="relative min-w-[200px]">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={clearDocSearch}
+                    onChange={(e) => setClearDocSearch(e.target.value)}
+                    placeholder="Tìm tên thread, mã task..."
+                    className="w-full pl-8 pr-3 py-1 text-xs border border-gray-200 dark:border-neutral-800 rounded-lg bg-white dark:bg-neutral-900 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Chế độ 1: Danh sách theo từng sprint */}
+            {clearDocViewMode === 'sprints' && (
+              <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+                {(clearDocAnalysis.sprints || []).length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400 dark:border-neutral-700">Chưa có dữ liệu sprint Clear Doc.</div>
+                ) : (
+                  (clearDocAnalysis.sprints || []).map((row) => {
+                    const pct = Number(row.ratio || 0)
+                    return (
+                      <div key={`${row.project}-${row.sprint}`} className="p-2.5 rounded-lg border border-gray-100 dark:border-neutral-800/80 bg-gray-50/40 dark:bg-neutral-900/40">
+                        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {row.project && <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{row.project}</span>}
+                            <span className="min-w-0 truncate font-semibold text-gray-700 dark:text-gray-200" title={row.sprint}>{row.sprint}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] shrink-0">
+                            <span className="text-gray-500 dark:text-gray-400">
+                              <strong className="text-emerald-600 dark:text-emerald-400">{row.clearedTasks}</strong> clear · <strong>{row.notNeededTasks}</strong> ko cần · {row.totalTasks} task
+                            </span>
+                            {row.threadCount > 0 && (
+                              <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
+                                {row.threadCount} thread ({row.issueCount} vd)
+                              </span>
+                            )}
+                            <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{pct}%</span>
+                          </div>
+                        </div>
+                        <div className="flex h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
+                          <div style={{ width: `${row.totalTasks > 0 ? (row.clearedTasks / row.totalTasks) * 100 : 0}%` }} className="bg-emerald-500 transition-all duration-500" />
+                          <div style={{ width: `${row.totalTasks > 0 ? (row.notNeededTasks / row.totalTasks) * 100 : 0}%` }} className="bg-slate-400 dark:bg-neutral-600 transition-all duration-500" />
+                          <div style={{ width: `${row.totalTasks > 0 ? (row.pendingTasks / row.totalTasks) * 100 : 0}%` }} className="bg-amber-400 transition-all duration-500" />
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {/* Chế độ 2: Danh sách các thread Clear Doc trong Quý */}
+            {clearDocViewMode === 'threads' && (
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {filteredClearDocs.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-gray-400 italic">Không tìm thấy thread Clear Doc phù hợp.</div>
+                ) : (
+                  filteredClearDocs.map((doc) => (
+                    <div key={doc.id} className="p-2.5 rounded-lg border border-gray-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xs hover:border-emerald-200 dark:hover:border-emerald-500/30 transition-colors">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                            {doc.issueCount || 1} vấn đề
+                          </span>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate" title={doc.threadTitle}>
+                            {doc.threadTitle || 'Thread không có tiêu đề'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {doc.sprint && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
+                              {doc.sprint}
+                            </span>
+                          )}
+                          {doc.threadUrl && (
+                            <a
+                              href={doc.threadUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 p-1"
+                              title="Mở link Slack thread"
+                            >
+                              <ExternalLink size={12} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Task keys liên kết */}
+                      {(doc.taskKeys || []).length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 my-1.5">
+                          {(doc.taskKeys || []).map((k) => (
+                            <span
+                              key={k}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-500/20"
+                            >
+                              {onNavigateToTask ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onNavigateToTask(k)}
+                                  className="hover:underline font-semibold"
+                                >
+                                  {k}
+                                </button>
+                              ) : (
+                                <span className="font-semibold">{k}</span>
+                              )}
+                              <a
+                                href={jiraUrl(k)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-blue-400 hover:text-blue-600"
+                              >
+                                <ExternalLink size={10} />
+                              </a>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Content snippet */}
+                      {doc.content && (
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-1 whitespace-pre-line bg-gray-50 dark:bg-neutral-950/40 p-1.5 rounded">
+                          {doc.content}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Panel>
+
+      {/* ─── PHẦN 7: THỐNG KÊ QC WEIGHT VÀ STORY POINTS CÓ 2 LỰA CHỌN (YÊU CẦU 4) ─── */}
       <div className="space-y-4">
         {/* Toggle chuyển đổi phạm vi thống kê */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">

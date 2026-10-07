@@ -476,6 +476,14 @@ app.get('/api/bsc', (req, res) => {
   const aggregatesBugs = computeAggregates(bugIssues)
   const aggregatesAll = computeAggregates([...bscTasks, ...bugIssues])
 
+  const gmsSprintsSet = new Set()
+  for (const t of quarterTasks) {
+    if (t.status === 'Released') {
+      const s = String(t.sprint || '').trim()
+      if (/^GMS(?:\s|$)/i.test(s)) gmsSprintsSet.add(s)
+    }
+  }
+
   const totals = {
     taskCount: bscTasks.length,
     bugCount: bugIssues.length,
@@ -486,6 +494,7 @@ app.get('/api/bsc', (req, res) => {
     taskStoryPoints: aggregatesTasks.storyPoints.total,
     bugStoryPoints: aggregatesBugs.storyPoints.total,
     totalStoryPoints: aggregatesAll.storyPoints.total,
+    gmsSprintCount: gmsSprintsSet.size,
   }
 
   // 2. Bugs
@@ -586,6 +595,95 @@ app.get('/api/bsc', (req, res) => {
     sprints: regSprints,
   }
 
+  // 5. Clear Doc Analysis for Released BSC tasks in this Quarter
+  const qDocs = getClearDocs({ quarter: selQuarter, year: selYear })
+  const qTaskStatuses = getClearDocTaskStatuses()
+  const taskToClearDocMap = new Map()
+  for (const doc of qDocs) {
+    for (const key of (doc.taskKeys || [])) {
+      if (!taskToClearDocMap.has(key)) taskToClearDocMap.set(key, [])
+      taskToClearDocMap.get(key).push(doc)
+    }
+  }
+
+  let tasksClearedCount = 0
+  let tasksNotNeededCount = 0
+  let tasksPendingCount = 0
+  for (const t of bscTasks) {
+    if (taskToClearDocMap.has(t.key)) {
+      tasksClearedCount++
+    } else if (qTaskStatuses[t.key]?.status === 'not_needed') {
+      tasksNotNeededCount++
+    } else {
+      tasksPendingCount++
+    }
+  }
+
+  const totalThreads = qDocs.length
+  const totalIssues = qDocs.reduce((sum, d) => sum + (Number(d.issueCount) || 1), 0)
+  const avgIssuesPerThread = totalThreads > 0 ? Number((totalIssues / totalThreads).toFixed(1)) : 0
+  const coverageRate = bscTasks.length > 0
+    ? Number((((tasksClearedCount + tasksNotNeededCount) / bscTasks.length) * 100).toFixed(1))
+    : 0
+
+  // Sprint breakdown for Clear Doc
+  const clearBySprint = new Map()
+  for (const t of bscTasks) {
+    if (!t.sprint) continue
+    const groupKey = `${t.project || ''}\u0000${t.sprint}`
+    if (!clearBySprint.has(groupKey)) {
+      clearBySprint.set(groupKey, {
+        project: t.project || '',
+        sprint: t.sprint,
+        totalTasks: 0,
+        clearedTasks: 0,
+        notNeededTasks: 0,
+        pendingTasks: 0,
+        threadCount: 0,
+        issueCount: 0,
+      })
+    }
+    const row = clearBySprint.get(groupKey)
+    row.totalTasks++
+    if (taskToClearDocMap.has(t.key)) {
+      row.clearedTasks++
+    } else if (qTaskStatuses[t.key]?.status === 'not_needed') {
+      row.notNeededTasks++
+    } else {
+      row.pendingTasks++
+    }
+  }
+
+  for (const d of qDocs) {
+    if (!d.sprint) continue
+    const groupKey = `${d.project || ''}\u0000${d.sprint}`
+    if (clearBySprint.has(groupKey)) {
+      const row = clearBySprint.get(groupKey)
+      row.threadCount++
+      row.issueCount += (Number(d.issueCount) || 1)
+    }
+  }
+
+  const clearSprints = [...clearBySprint.values()]
+    .map((row) => ({
+      ...row,
+      ratio: row.totalTasks > 0 ? Number((((row.clearedTasks + row.notNeededTasks) / row.totalTasks) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+
+  const clearDocAnalysis = {
+    totalThreads,
+    totalIssues,
+    avgIssuesPerThread,
+    totalTasks: bscTasks.length,
+    clearedTasks: tasksClearedCount,
+    notNeededTasks: tasksNotNeededCount,
+    pendingTasks: tasksPendingCount,
+    coverageRate,
+    sprints: clearSprints,
+    docs: qDocs,
+  }
+
   res.json({
     quarter: selQuarter,
     year: selYear,
@@ -603,6 +701,7 @@ app.get('/api/bsc', (req, res) => {
     myFixedBugs,
     automationAnalysis,
     regressionAnalysis,
+    clearDocAnalysis,
   })
 })
 
