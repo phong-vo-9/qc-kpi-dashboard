@@ -339,8 +339,11 @@ app.get('/api/kpi', (req, res) => {
 // Automation coverage intentionally ignores the Label filter so selecting
 // AutomationTest does not make the denominator equal to the automation subset.
 app.get('/api/automation-analysis', (req, res) => {
+  const isRegression = (task) => (task.labels || []).some(
+    (label) => normalizeLabel(label) === 'regressiontest'
+  )
   const filtered = applyFilters(getTasks(), { ...req.query, label: '' })
-    .filter((task) => task.type !== 'Bug' && /^GMS\s+/i.test(String(task.sprint || '').trim()))
+    .filter((task) => task.type !== 'Bug' && !isRegression(task) && /^GMS\s+/i.test(String(task.sprint || '').trim()))
   const isAutomation = (task) => (task.labels || []).some(
     (label) => String(label).trim().toLowerCase() === 'automationtest'
   )

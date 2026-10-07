@@ -417,13 +417,27 @@ function SprintEnvironmentPanel({ sprintAnalysis }) {
 function AutomationFilteredPanel({ tasks = [], onNavigateToTask }) {
   const [expanded, setExpanded] = useState(false)
 
-  const automationTasks = useMemo(() => {
-    return tasks.filter((t) =>
-      (t.labels || []).some((l) => String(l).trim().toLowerCase() === 'automationtest')
-    )
+  const isRegressionTask = (t) => {
+    if (!t) return false
+    const labels = t.labels || []
+    if (labels.some((l) => String(l).toLowerCase().replace(/[\s_-]/g, '') === 'regressiontest')) return true
+    const summary = String(t.summary || '').toLowerCase()
+    if (summary.includes('regression test') || summary.includes('regressiontest')) return true
+    return false
+  }
+
+  // Loại bỏ các task RegressionTest theo yêu cầu
+  const nonRegressionTasks = useMemo(() => {
+    return tasks.filter((t) => !isRegressionTask(t))
   }, [tasks])
 
-  const total = tasks.length
+  const automationTasks = useMemo(() => {
+    return nonRegressionTasks.filter((t) =>
+      (t.labels || []).some((l) => String(l).trim().toLowerCase() === 'automationtest')
+    )
+  }, [nonRegressionTasks])
+
+  const total = nonRegressionTasks.length
   const autoCount = automationTasks.length
   const ratio = total > 0 ? Number(((autoCount / total) * 100).toFixed(1)) : 0
 
@@ -447,7 +461,7 @@ function AutomationFilteredPanel({ tasks = [], onNavigateToTask }) {
       title="Thống kê Automation Task (Theo bộ lọc hiện tại)"
       right={(
         <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300">
-          <Bot size={13} /> Label: AutomationTest
+          <Bot size={13} /> Label: AutomationTest (Không tính Regression)
         </span>
       )}
     >
@@ -465,7 +479,7 @@ function AutomationFilteredPanel({ tasks = [], onNavigateToTask }) {
               <Bot size={17} className="text-cyan-500" />
               <span>Tiến độ Automation</span>
               <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
-                ({autoCount}/{total} tasks trong bộ lọc)
+                ({autoCount}/{total} tasks trong bộ lọc · Đã loại trừ RegressionTest)
               </span>
             </div>
 
