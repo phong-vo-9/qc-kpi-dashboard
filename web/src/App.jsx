@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import { LayoutDashboard, Table2, Bug, Layers3, Award, FileText } from 'lucide-react'
+import { LayoutDashboard, Table2, Bug, Layers3, Award, FileText, Headphones } from 'lucide-react'
 import Header from './components/Header.jsx'
 import Filters, { EMPTY_FILTERS } from './components/Filters.jsx'
 import { Skeleton } from './components/ui.jsx'
 import Overview from './tabs/Overview.jsx'
 import BscStats from './tabs/BscStats.jsx'
 import ClearDoc from './tabs/ClearDoc.jsx'
+import ItsManagement from './tabs/ItsManagement.jsx'
 import Tasks from './tabs/Tasks.jsx'
 import Bugs from './tabs/Bugs.jsx'
 import BugBacklog from './tabs/BugBacklog.jsx'
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'bsc', label: 'Thống kê BSC', icon: Award },
   { id: 'clear-doc', label: 'Clear doc', icon: FileText },
+  { id: 'its', label: 'Quản lý ITS', icon: Headphones },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
   { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
   { id: 'bug-backlog', label: 'Bug backlog', icon: Layers3 },
@@ -141,7 +143,7 @@ export default function App() {
         </div>
 
         {/* Global filters (§3) */}
-        {tab !== 'bug-backlog' && tab !== 'bsc' && tab !== 'clear-doc' && (
+        {tab !== 'bug-backlog' && tab !== 'bsc' && tab !== 'clear-doc' && tab !== 'its' && (
           <Filters
             options={options}
             applied={filters}
@@ -160,6 +162,8 @@ export default function App() {
           <div key={theme}><BscStats mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
         ) : tab === 'clear-doc' ? (
           <div key={theme}><ClearDoc tasks={tasks} mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
+        ) : tab === 'its' ? (
+          <div key={theme}><ItsManagement /></div>
         ) : tab === 'tasks' ? (
           <Tasks tasks={tasks} highlightKey={highlightKey} />
         ) : tab === 'bugs' ? (

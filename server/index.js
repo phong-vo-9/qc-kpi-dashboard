@@ -1,7 +1,7 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
-import { fetchTasks, fetchActiveSprint, fetchBugBacklog } from './jira.js'
-import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus } from './db.js'
+import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets } from './jira.js'
+import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
 const app = express()
@@ -104,6 +104,12 @@ app.post('/api/refresh', async (req, res) => {
       }
       saveTasks(allTasks)
       try {
+        const its = await fetchItsTickets()
+        saveItsTickets(its, true)
+      } catch (e) {
+        console.error('Lỗi sync ITS:', e.message)
+      }
+      try {
         const bugBacklog = await fetchBugBacklog(backlogProject)
         saveBugBacklog(bugBacklog, backlogProject)
         res.json({ count: allTasks.length, backlogCount: bugBacklog.length, lastRefresh: getMeta('lastRefresh') })
@@ -188,6 +194,164 @@ app.post('/api/clear-docs/task-status', (req, res) => {
     } else {
       setClearDocTaskStatus(taskKey, status || 'not_needed', note || '')
     }
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ITS Management APIs
+app.get('/api/its', async (req, res) => {
+  try {
+    let tickets = getItsTickets()
+    if (tickets.length === 0) {
+      try {
+        const fetched = await fetchItsTickets()
+        if (fetched.length > 0) {
+          saveItsTickets(fetched, true)
+          tickets = getItsTickets()
+        }
+      } catch (fetchErr) {
+        console.error('Không thể auto-fetch ITS tickets:', fetchErr.message)
+      }
+    }
+
+    const { quarter, year, status, type, label, slaStatus, classify, search } = req.query
+
+    if (quarter) {
+      const quarters = splitMultiValue(quarter)
+      tickets = tickets.filter(t => quarters.includes(t.quarter))
+    }
+    if (year) {
+      const years = splitMultiValue(year).map(Number)
+      tickets = tickets.filter(t => years.includes(t.year))
+    }
+    if (status) {
+      const statuses = splitMultiValue(status).map(s => s.toLowerCase())
+      tickets = tickets.filter(t => statuses.includes((t.status || '').toLowerCase()))
+    }
+    if (type) {
+      const types = splitMultiValue(type).map(ty => ty.toLowerCase())
+      tickets = tickets.filter(t => types.includes((t.type || '').toLowerCase()))
+    }
+    if (classify) {
+      const classifies = splitMultiValue(classify).map(c => c.toLowerCase())
+      tickets = tickets.filter(t => classifies.some(c => (t.classify || '').toLowerCase().includes(c)))
+    }
+    if (label) {
+      const labels = splitMultiValue(label).map(l => l.toLowerCase())
+      tickets = tickets.filter(t => (t.labels || []).some(tl => labels.some(fl => tl.toLowerCase().includes(fl))))
+    }
+    if (slaStatus) {
+      if (slaStatus === 'breached') {
+        tickets = tickets.filter(t => t.slaResolutionBreached || t.slaFirstResponseBreached)
+      } else if (slaStatus === 'warning') {
+        tickets = tickets.filter(t => {
+          if (t.slaResolutionBreached || t.slaFirstResponseBreached) return false
+          const resMillis = t.slaResolutionDetail?.remainingMillis
+          const respMillis = t.slaFirstResponseDetail?.remainingMillis
+          const isResWarning = resMillis != null && resMillis > 0 && resMillis <= 4 * 3600 * 1000
+          const isRespWarning = respMillis != null && respMillis > 0 && respMillis <= 4 * 3600 * 1000
+          return isResWarning || isRespWarning
+        })
+      } else if (slaStatus === 'ok') {
+        tickets = tickets.filter(t => !t.slaResolutionBreached && !t.slaFirstResponseBreached)
+      }
+    }
+    if (search) {
+      const q = search.trim().toLowerCase()
+      tickets = tickets.filter(t =>
+        (t.key || '').toLowerCase().includes(q) ||
+        (t.summary || '').toLowerCase().includes(q) ||
+        (t.classify || '').toLowerCase().includes(q) ||
+        (t.linkedBugs || []).some(b => (b.key || '').toLowerCase().includes(q) || (b.summary || '').toLowerCase().includes(q))
+      )
+    }
+
+    res.json(tickets)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/its/refresh', async (req, res) => {
+  try {
+    const itsTickets = await fetchItsTickets()
+    saveItsTickets(itsTickets, true)
+    res.json({ success: true, count: itsTickets.length })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/its/import', (req, res) => {
+  try {
+    const { tickets, replace } = req.body
+    if (!Array.isArray(tickets)) {
+      return res.status(400).json({ error: 'tickets must be an array' })
+    }
+    saveItsTickets(tickets, Boolean(replace))
+    res.json({ success: true, count: tickets.length })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/its/clear', (req, res) => {
+  try {
+    clearItsTickets()
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/its/:key', (req, res) => {
+  try {
+    deleteItsTicket(req.params.key)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Non-ITS Feedback Management APIs
+app.get('/api/non-its-feedbacks', (req, res) => {
+  try {
+    const list = getNonItsFeedbacks(req.query)
+    res.json(list)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/non-its-feedbacks', (req, res) => {
+  try {
+    if (!req.body || !req.body.title || !String(req.body.title).trim()) {
+      return res.status(400).json({ error: 'Nội dung feedback không được để trống' })
+    }
+    const id = saveNonItsFeedback(req.body)
+    res.json({ success: true, id })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/non-its-feedbacks/:id', (req, res) => {
+  try {
+    if (!req.body || !req.body.title || !String(req.body.title).trim()) {
+      return res.status(400).json({ error: 'Nội dung feedback không được để trống' })
+    }
+    const id = saveNonItsFeedback({ ...req.body, id: req.params.id })
+    res.json({ success: true, id })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/non-its-feedbacks/:id', (req, res) => {
+  try {
+    deleteNonItsFeedback(req.params.id)
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
