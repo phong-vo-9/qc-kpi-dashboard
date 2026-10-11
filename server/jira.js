@@ -8,7 +8,7 @@ const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
   'created', 'updated', 'duedate', 'subtasks', 'customfield_10503', 'customfield_13212',
   'customfield_10109', 'customfield_10107', 'issuetype', 'reporter', 'issuelinks', 'customfield_11204',
-  'customfield_10500', 'customfield_10403',
+  'customfield_10500', 'customfield_10403', 'worklog',
 ]
 
 const ENVIRONMENT_ORDER = ['Dev', 'UAT', 'Canary', 'Staging', 'Production']
@@ -107,11 +107,79 @@ function normalizeEnvironment(value) {
   return match || raw
 }
 
-function normalize(issue, subtasksMap = {}) {
+function calculateQcLoggedSeconds(worklogs = [], qcIdentifier = '') {
+  const q = (qcIdentifier || '').toLowerCase()
+  let total = 0
+  for (const w of worklogs) {
+    const authorName = (w.author?.name || '').toLowerCase()
+    const authorEmail = (w.author?.emailAddress || '').toLowerCase()
+    const authorDisplayName = (w.author?.displayName || '').toLowerCase()
+    const matches = !q ||
+      authorName.includes(q) || q.includes(authorName) ||
+      authorEmail.includes(q) || q.includes(authorEmail) ||
+      authorDisplayName.includes(q) || q.includes(authorDisplayName) ||
+      authorDisplayName.includes('nguyễn phú thành') ||
+      authorName.includes('phuthanh')
+    if (matches) {
+      total += Number(w.timeSpentSeconds) || 0
+    }
+  }
+  return total
+}
+
+async function fetchTempoAllocationsMap(e, headers) {
+  try {
+    const currentYear = new Date().getFullYear()
+    const startDate = `${currentYear}-01-01`
+    const endDate = `${currentYear}-12-31`
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 35000)
+
+    const res = await fetch(
+      `${e.url}/rest/tempo-planning/1/allocation?startDate=${startDate}&endDate=${endDate}`,
+      { headers, signal: controller.signal }
+    )
+    clearTimeout(timeout)
+    if (!res.ok) return {}
+
+    const list = await res.json()
+    if (!Array.isArray(list)) return {}
+
+    const q = (e.qcName || e.user || '').toLowerCase()
+    const map = {}
+    for (const item of list) {
+      const aUserKey = (item.assignee?.userKey || '').toLowerCase()
+      const aKey = (item.assignee?.key || '').toLowerCase()
+      const matches = !q ||
+        aKey.includes(q) || q.includes(aKey) ||
+        aUserKey.includes(q) ||
+        aKey.includes('phuthanh') ||
+        aUserKey === 'jirauser14615'
+
+      if (matches) {
+        const key = item.planItem?.key
+        const id = item.planItem?.id
+        const sec = Number(item.seconds) || 0
+        if (key) map[key] = (map[key] || 0) + sec
+        if (id) map[id] = (map[id] || 0) + sec
+      }
+    }
+    return map
+  } catch (err) {
+    console.error('Không thể lấy danh sách Tempo allocations:', err.message)
+    return {}
+  }
+}
+
+function normalize(issue, subtasksMap = {}, qcAllocMap = {}, qcIdentifier = '') {
   const f = issue.fields || {}
   const qc = f.customfield_10503
   const links = f.issuelinks || []
   const linkedTask = links.map((l) => (l.inwardIssue || l.outwardIssue)?.key).filter(Boolean)[0] || ''
+  const worklogs = f.worklog?.worklogs || []
+  const loggedSeconds = calculateQcLoggedSeconds(worklogs, qcIdentifier)
+  const planSeconds = qcAllocMap[issue.key] ?? (issue.id ? qcAllocMap[issue.id] : 0) ?? 0
+
   return {
     key: issue.key,
     summary: f.summary || '',
@@ -134,6 +202,8 @@ function normalize(issue, subtasksMap = {}) {
     enddate: f.customfield_11204 || null,
     reporter: f.reporter?.displayName || '',
     linkedTask,
+    planSeconds,
+    loggedSeconds,
   }
 }
 
@@ -176,7 +246,7 @@ async function fetchSubtasksMap(project, e, headers) {
   return subtasksMap
 }
 
-async function fetchIssuesByJql(jql, headers, subtasksMap = {}) {
+async function fetchIssuesByJql(jql, headers, subtasksMap = {}, qcAllocMap = {}, qcIdentifier = "") {
   const e = env()
   const out = []
   let startAt = 0
@@ -195,7 +265,7 @@ async function fetchIssuesByJql(jql, headers, subtasksMap = {}) {
     const data = await res.json()
 
     for (const issue of data.issues || []) {
-      out.push(normalize(issue, subtasksMap))
+      out.push(normalize(issue, subtasksMap, qcAllocMap, qcIdentifier))
     }
 
     startAt += maxResults
@@ -274,6 +344,13 @@ export async function fetchTasks(projectOverride) {
     console.error('Không thể lấy danh sách bug subtasks:', err.message)
   }
 
+  let qcAllocMap = {}
+  try {
+    qcAllocMap = await fetchTempoAllocationsMap(e, headers)
+  } catch (err) {
+    console.error('Không thể lấy danh sách Tempo allocations:', err.message)
+  }
+
   const out = []
   let startAt = 0
   const maxResults = 100
@@ -321,7 +398,7 @@ export async function fetchTasks(projectOverride) {
         if (!matches) continue
       }
 
-      out.push(normalize(issue, subtasksMap))
+      out.push(normalize(issue, subtasksMap, qcAllocMap, e.qcName || e.user))
     }
 
     startAt += maxResults

@@ -102,11 +102,15 @@ try { db.exec('ALTER TABLE bug_backlog ADD COLUMN reporter TEXT;'); } catch (e) 
 try { db.exec('ALTER TABLE bug_backlog ADD COLUMN linkedTask TEXT;'); } catch (e) {}
 try { db.exec('ALTER TABLE bug_backlog ADD COLUMN storyPoints REAL;'); } catch (e) {}
 try { db.exec('ALTER TABLE bug_backlog ADD COLUMN environment TEXT;'); } catch (e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN planSeconds REAL DEFAULT 0;'); } catch (e) {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN loggedSeconds REAL DEFAULT 0;'); } catch (e) {}
+try { db.exec('ALTER TABLE bug_backlog ADD COLUMN planSeconds REAL DEFAULT 0;'); } catch (e) {}
+try { db.exec('ALTER TABLE bug_backlog ADD COLUMN loggedSeconds REAL DEFAULT 0;'); } catch (e) {}
 try { db.exec('ALTER TABLE its_tickets ADD COLUMN sla_first_response_detail TEXT;'); } catch (e) {}
 try { db.exec('ALTER TABLE its_tickets ADD COLUMN sla_resolution_detail TEXT;'); } catch (e) {}
 
-const ISSUE_COLUMNS = 'key,summary,status,priority,assignee,assignedQC,qcWeight,storyPoints,environment,labels,project,component,created,updated,duedate,bugCount,sprint,type,enddate,reporter,linkedTask'
-const ISSUE_VALUES = '@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@storyPoints,@environment,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint,@type,@enddate,@reporter,@linkedTask'
+const ISSUE_COLUMNS = 'key,summary,status,priority,assignee,assignedQC,qcWeight,storyPoints,environment,labels,project,component,created,updated,duedate,bugCount,sprint,type,enddate,reporter,linkedTask,planSeconds,loggedSeconds'
+const ISSUE_VALUES = '@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@storyPoints,@environment,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint,@type,@enddate,@reporter,@linkedTask,@planSeconds,@loggedSeconds'
 
 const insertTasks = db.prepare(`
 INSERT INTO tasks (${ISSUE_COLUMNS})
@@ -136,6 +140,8 @@ function persistIssues(table, rows, projectFilter) {
         enddate: r.enddate || null,
         reporter: r.reporter || '',
         linkedTask: r.linkedTask || '',
+        planSeconds: Number(r.planSeconds) || 0,
+        loggedSeconds: Number(r.loggedSeconds) || 0,
       })
     }
   })
