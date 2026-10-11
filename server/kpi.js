@@ -25,8 +25,38 @@ export function parseLabels(labels = []) {
   }
 }
 
+export function formatDuration(seconds) {
+  if (!seconds || seconds <= 0) return '0h'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (m === 0) return `${h}h`
+  if (h === 0) return `${m}m`
+  return `${h}h ${m}m`
+}
+
 export function decorate(task) {
-  return { ...task, ...parseLabels(task.labels) }
+  const planSeconds = Number(task.planSeconds) || 0
+  const loggedSeconds = Number(task.loggedSeconds) || 0
+  const diffSeconds = planSeconds - loggedSeconds
+  const isOverlogged = planSeconds > 0 && loggedSeconds > planSeconds
+  const isMissingPlan = planSeconds === 0
+  const progressPercent = planSeconds > 0 ? Math.round((loggedSeconds / planSeconds) * 100) : null
+
+  return {
+    ...task,
+    ...parseLabels(task.labels),
+    planSeconds,
+    loggedSeconds,
+    planHours: Math.round((planSeconds / 3600) * 10) / 10,
+    loggedHours: Math.round((loggedSeconds / 3600) * 10) / 10,
+    planFormatted: formatDuration(planSeconds),
+    loggedFormatted: formatDuration(loggedSeconds),
+    diffSeconds,
+    diffFormatted: formatDuration(Math.abs(diffSeconds)),
+    isOverlogged,
+    isMissingPlan,
+    progressPercent,
+  }
 }
 
 // Bucket a bug count into a distribution band (ui.md §7 "Bug Distribution").

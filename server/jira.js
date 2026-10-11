@@ -8,7 +8,7 @@ const FIELDS = [
   'summary', 'status', 'priority', 'assignee', 'labels', 'components', 'project',
   'created', 'updated', 'duedate', 'subtasks', 'customfield_10503', 'customfield_13212',
   'customfield_10109', 'customfield_10107', 'issuetype', 'reporter', 'issuelinks', 'customfield_11204',
-  'customfield_10500', 'customfield_10403',
+  'customfield_10500', 'customfield_10403', 'worklog',
 ]
 
 const ENVIRONMENT_ORDER = ['Dev', 'UAT', 'Canary', 'Staging', 'Production']
@@ -107,11 +107,79 @@ function normalizeEnvironment(value) {
   return match || raw
 }
 
-function normalize(issue, subtasksMap = {}) {
+function calculateQcLoggedSeconds(worklogs = [], qcIdentifier = '') {
+  const q = (qcIdentifier || '').toLowerCase()
+  let total = 0
+  for (const w of worklogs) {
+    const authorName = (w.author?.name || '').toLowerCase()
+    const authorEmail = (w.author?.emailAddress || '').toLowerCase()
+    const authorDisplayName = (w.author?.displayName || '').toLowerCase()
+    const matches = !q ||
+      authorName.includes(q) || q.includes(authorName) ||
+      authorEmail.includes(q) || q.includes(authorEmail) ||
+      authorDisplayName.includes(q) || q.includes(authorDisplayName) ||
+      authorDisplayName.includes('nguyễn phú thành') ||
+      authorName.includes('phuthanh')
+    if (matches) {
+      total += Number(w.timeSpentSeconds) || 0
+    }
+  }
+  return total
+}
+
+async function fetchTempoAllocationsMap(e, headers) {
+  try {
+    const currentYear = new Date().getFullYear()
+    const startDate = `${currentYear}-01-01`
+    const endDate = `${currentYear}-12-31`
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 35000)
+
+    const res = await fetch(
+      `${e.url}/rest/tempo-planning/1/allocation?startDate=${startDate}&endDate=${endDate}`,
+      { headers, signal: controller.signal }
+    )
+    clearTimeout(timeout)
+    if (!res.ok) return {}
+
+    const list = await res.json()
+    if (!Array.isArray(list)) return {}
+
+    const q = (e.qcName || e.user || '').toLowerCase()
+    const map = {}
+    for (const item of list) {
+      const aUserKey = (item.assignee?.userKey || '').toLowerCase()
+      const aKey = (item.assignee?.key || '').toLowerCase()
+      const matches = !q ||
+        aKey.includes(q) || q.includes(aKey) ||
+        aUserKey.includes(q) ||
+        aKey.includes('phuthanh') ||
+        aUserKey === 'jirauser14615'
+
+      if (matches) {
+        const key = item.planItem?.key
+        const id = item.planItem?.id
+        const sec = Number(item.seconds) || 0
+        if (key) map[key] = (map[key] || 0) + sec
+        if (id) map[id] = (map[id] || 0) + sec
+      }
+    }
+    return map
+  } catch (err) {
+    console.error('Không thể lấy danh sách Tempo allocations:', err.message)
+    return {}
+  }
+}
+
+function normalize(issue, subtasksMap = {}, qcAllocMap = {}, qcIdentifier = '') {
   const f = issue.fields || {}
   const qc = f.customfield_10503
   const links = f.issuelinks || []
   const linkedTask = links.map((l) => (l.inwardIssue || l.outwardIssue)?.key).filter(Boolean)[0] || ''
+  const worklogs = f.worklog?.worklogs || []
+  const loggedSeconds = calculateQcLoggedSeconds(worklogs, qcIdentifier)
+  const planSeconds = qcAllocMap[issue.key] ?? (issue.id ? qcAllocMap[issue.id] : 0) ?? 0
+
   return {
     key: issue.key,
     summary: f.summary || '',
@@ -134,6 +202,8 @@ function normalize(issue, subtasksMap = {}) {
     enddate: f.customfield_11204 || null,
     reporter: f.reporter?.displayName || '',
     linkedTask,
+    planSeconds,
+    loggedSeconds,
   }
 }
 
@@ -176,7 +246,7 @@ async function fetchSubtasksMap(project, e, headers) {
   return subtasksMap
 }
 
-async function fetchIssuesByJql(jql, headers, subtasksMap = {}) {
+async function fetchIssuesByJql(jql, headers, subtasksMap = {}, qcAllocMap = {}, qcIdentifier = "") {
   const e = env()
   const out = []
   let startAt = 0
@@ -195,7 +265,7 @@ async function fetchIssuesByJql(jql, headers, subtasksMap = {}) {
     const data = await res.json()
 
     for (const issue of data.issues || []) {
-      out.push(normalize(issue, subtasksMap))
+      out.push(normalize(issue, subtasksMap, qcAllocMap, qcIdentifier))
     }
 
     startAt += maxResults
@@ -274,6 +344,13 @@ export async function fetchTasks(projectOverride) {
     console.error('Không thể lấy danh sách bug subtasks:', err.message)
   }
 
+  let qcAllocMap = {}
+  try {
+    qcAllocMap = await fetchTempoAllocationsMap(e, headers)
+  } catch (err) {
+    console.error('Không thể lấy danh sách Tempo allocations:', err.message)
+  }
+
   const out = []
   let startAt = 0
   const maxResults = 100
@@ -321,7 +398,7 @@ export async function fetchTasks(projectOverride) {
         if (!matches) continue
       }
 
-      out.push(normalize(issue, subtasksMap))
+      out.push(normalize(issue, subtasksMap, qcAllocMap, e.qcName || e.user))
     }
 
     startAt += maxResults
@@ -343,3 +420,145 @@ export async function fetchBugBacklog(projectOverride) {
 
   return fetchIssuesByJql(jql, headers)
 }
+
+function parseSlaCycle(slaField) {
+  if (!slaField) return { name: '', breached: false, remainingFriendly: '—', remainingMillis: null, elapsedFriendly: '—', goalFriendly: '—', ongoing: false }
+  const cycle = slaField.ongoingCycle || (slaField.completedCycles && slaField.completedCycles[slaField.completedCycles.length - 1])
+  if (!cycle) return { name: slaField.name || '', breached: false, remainingFriendly: '—', remainingMillis: null, elapsedFriendly: '—', goalFriendly: '—', ongoing: false }
+
+  const remainingMillis = cycle.remainingTime?.millis ?? null
+  const breached = Boolean(cycle.breached || (remainingMillis != null && remainingMillis < 0))
+  return {
+    name: slaField.name || '',
+    breached,
+    ongoing: Boolean(slaField.ongoingCycle),
+    remainingFriendly: cycle.remainingTime?.friendly || (remainingMillis != null ? `${Math.round(remainingMillis / 3600000)}h` : '—'),
+    remainingMillis,
+    elapsedFriendly: cycle.elapsedTime?.friendly || '—',
+    goalFriendly: cycle.goalDuration?.friendly || '—',
+  }
+}
+
+function parseClassify(field) {
+  if (!field) return ''
+  if (typeof field === 'string') return field
+  let res = field.value || ''
+  if (field.child && field.child.value) {
+    res += ' > ' + field.child.value
+  }
+  return res
+}
+
+function deriveQuarterYear(labels = [], created = null) {
+  for (const l of labels) {
+    const m = /^(Q[1-4])[-_](\d{4})$/i.exec(String(l).trim())
+    if (m) {
+      return { quarter: m[1].toUpperCase(), year: Number(m[2]) }
+    }
+  }
+  if (created) {
+    const d = new Date(created)
+    if (!isNaN(d.getTime())) {
+      const q = Math.floor(d.getMonth() / 3) + 1
+      return { quarter: `Q${q}`, year: d.getFullYear() }
+    }
+  }
+  return { quarter: '', year: null }
+}
+
+function normalizeItsIssue(issue, jiraBaseUrl) {
+  const f = issue.fields || {}
+  const labels = f.labels || []
+  const { quarter, year } = deriveQuarterYear(labels, f.created)
+
+  const linkedBugs = (f.issuelinks || []).map((l) => {
+    const linked = l.inwardIssue || l.outwardIssue
+    if (!linked) return null
+    return {
+      key: linked.key,
+      summary: linked.fields?.summary || '',
+      type: linked.fields?.issuetype?.name || '',
+      status: linked.fields?.status?.name || '',
+      link: `${jiraBaseUrl}/browse/${linked.key}`,
+      relationship: l.type?.inward || l.type?.outward || l.type?.name || 'relates to',
+    }
+  }).filter(Boolean)
+
+  const slaResolution = parseSlaCycle(f.customfield_10201)
+  const slaFirstResponse = parseSlaCycle(f.customfield_10202)
+
+  return {
+    key: issue.key,
+    summary: f.summary || '',
+    title: `[${issue.key}] ${f.summary || ''}`,
+    link: `${jiraBaseUrl}/browse/${issue.key}`,
+    project: f.project?.key || 'ITS',
+    type: f.issuetype?.name || 'Support',
+    priority: f.priority?.name || 'Medium',
+    status: f.status?.name || 'Open',
+    statusCategory: f.status?.statusCategory?.key || '',
+    resolution: f.resolution?.name || '',
+    assignee: f.assignee?.displayName || '',
+    assigneeUsername: f.assignee?.name || f.assignee?.emailAddress || '',
+    reporter: f.reporter?.displayName || '',
+    labels,
+    created: f.created || null,
+    updated: f.updated || null,
+    resolved: f.resolutiondate || null,
+    component: (f.components || []).map((c) => c.name).join(', '),
+    classify: parseClassify(f.customfield_11032),
+    slaFirstResponse: slaFirstResponse.remainingFriendly,
+    slaFirstResponseRemaining: slaFirstResponse.remainingFriendly,
+    slaFirstResponseBreached: slaFirstResponse.breached,
+    slaFirstResponseDetail: slaFirstResponse,
+    slaResolution: slaResolution.remainingFriendly,
+    slaResolutionRemaining: slaResolution.remainingFriendly,
+    slaResolutionBreached: slaResolution.breached,
+    slaResolutionDetail: slaResolution,
+    linkedBugs,
+    quarter,
+    year,
+  }
+}
+
+export async function fetchItsTickets() {
+  const e = env()
+  const headers = {
+    Authorization: authHeader(e),
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+  const jql = 'project = "ITS" AND assignee in ("phuthanh.nguyen@vexere.com", "Nguyễn Phú Thành") ORDER BY created DESC'
+  const fields = [
+    'summary', 'status', 'priority', 'assignee', 'labels', 'issuetype', 'reporter',
+    'issuelinks', 'customfield_11032', 'customfield_10201', 'customfield_10202',
+    'created', 'updated', 'resolution', 'components', 'project'
+  ]
+
+  const out = []
+  let startAt = 0
+  const maxResults = 100
+
+  while (true) {
+    const res = await fetch(`${e.url}/rest/api/2/search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ jql, fields, startAt, maxResults }),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Jira ITS fetch ${res.status}: ${text.slice(0, 300)}`)
+    }
+    const data = await res.json()
+
+    for (const issue of data.issues || []) {
+      out.push(normalizeItsIssue(issue, e.url))
+    }
+
+    startAt += maxResults
+    if (startAt >= (data.total || 0)) break
+  }
+
+  return out
+}
+

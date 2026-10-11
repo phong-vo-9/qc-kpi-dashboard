@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, ExternalLink, Inbox, AlertTriangle, Star, RefreshCw, Zap, Bot } from 'lucide-react'
+import { Search, ExternalLink, Inbox, AlertTriangle, Star, RefreshCw, Zap, Bot, Table2, Clock } from 'lucide-react'
+import TaskTimeManagement from './TaskTimeManagement.jsx'
 import { Badge, EmptyState } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
 import { jiraUrl } from '../lib/api.js'
@@ -52,6 +53,10 @@ function EnvironmentBadge({ value }) {
 }
 
 export default function Tasks({ tasks, highlightKey }) {
+  const [activeSubTab, setActiveSubTab] = useState('list') // 'list' | 'time'
+  const timeAlertCount = useMemo(() => {
+    return tasks.filter((t) => t.type !== 'Bug' && (t.isOverlogged || t.isMissingPlan)).length
+  }, [tasks])
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -200,7 +205,51 @@ export default function Tasks({ tasks, highlightKey }) {
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm">
+    <div className="space-y-4">
+      {/* Sub-tab Switcher */}
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-neutral-800 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('list')}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
+            activeSubTab === 'list'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-neutral-800'
+          }`}
+        >
+          <Table2 size={16} />
+          <span>Danh sách Task</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('time')}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
+            activeSubTab === 'time'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-neutral-800'
+          }`}
+        >
+          <Clock size={16} />
+          <span>Quản lý Time</span>
+          {timeAlertCount > 0 && (
+            <span
+              className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
+                activeSubTab === 'time'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
+              }`}
+            >
+              {timeAlertCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeSubTab === 'time' ? (
+        <TaskTimeManagement tasks={tasks} highlightKey={highlightKey} />
+      ) : (
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm">
       {/* Search + count */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-100 dark:border-neutral-800">
         <div className="relative">
@@ -364,6 +413,8 @@ export default function Tasks({ tasks, highlightKey }) {
             </div>
           </div>
         </>
+      )}
+        </div>
       )}
     </div>
   )
