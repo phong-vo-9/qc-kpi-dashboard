@@ -171,6 +171,42 @@ async function fetchTempoAllocationsMap(e, headers) {
   }
 }
 
+export async function fetchTempoWorklogs(from, to, workerOverride) {
+  const e = env()
+  const worker = workerOverride || process.env.JIRA_USER_KEY || 'JIRAUSER14615'
+  const headers = {
+    Authorization: authHeader(e),
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20000)
+  try {
+    const res = await fetch(`${e.url}/rest/tempo-timesheets/4/worklogs/search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        worker: [worker],
+        from,
+        to,
+      }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+    if (!res.ok) {
+      const text = await res.text()
+      console.error(`Lỗi lấy Tempo worklogs ${res.status}:`, text.slice(0, 200))
+      return []
+    }
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch (err) {
+    clearTimeout(timeout)
+    console.error('Không thể lấy danh sách Tempo worklogs:', err.message)
+    return []
+  }
+}
+
 function normalize(issue, subtasksMap = {}, qcAllocMap = {}, qcIdentifier = '') {
   const f = issue.fields || {}
   const qc = f.customfield_10503

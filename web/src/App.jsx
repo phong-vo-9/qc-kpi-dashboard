@@ -12,6 +12,7 @@ import Bugs from './tabs/Bugs.jsx'
 import BugBacklog from './tabs/BugBacklog.jsx'
 import { api, query } from './lib/api.js'
 import { useDarkMode } from './lib/useDarkMode.js'
+import { refreshTempoData } from './components/TempoReminder.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
@@ -102,7 +103,7 @@ export default function App() {
         setSyncStatus('error')
         alert('Lỗi đồng bộ Jira:\n' + r.error)
       } else {
-        await load()
+        await Promise.all([load(), refreshTempoData(true)])
         setSyncStatus('success')
         setTimeout(() => setSyncStatus('idle'), 2500)
       }

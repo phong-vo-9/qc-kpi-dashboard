@@ -1,6 +1,6 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
-import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets } from './jira.js'
+import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets, fetchTempoWorklogs } from './jira.js'
 import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
@@ -132,6 +132,111 @@ app.get('/api/bug-backlog', (req, res) => {
   const selectedProjects = splitMultiValue(req.query.project)
   const rows = selectedProjects.length ? all.filter((x) => selectedProjects.includes(x.project)) : all
   res.json(rows)
+})
+
+let tempoCache = {
+  timestamp: 0,
+  data: null,
+  key: '',
+}
+
+app.get('/api/tempo-today', async (req, res) => {
+  try {
+    const now = new Date()
+    const targetDate = req.query.date || new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(now)
+    const force = req.query.force === '1' || req.query.force === 'true'
+
+    const cacheKey = targetDate
+    const nowMs = Date.now()
+    if (!force && tempoCache.data && tempoCache.key === cacheKey && nowMs - tempoCache.timestamp < 30000) {
+      return res.json(tempoCache.data)
+    }
+
+    const [year, month] = targetDate.split('-')
+    const lastDayOfMonth = new Date(Number(year), Number(month), 0).getDate()
+    const from = `${year}-${month}-01`
+    const to = `${year}-${month}-${String(lastDayOfMonth).padStart(2, '0')}`
+
+    const worklogs = await fetchTempoWorklogs(from, to)
+
+    // Filter targetDate worklogs
+    const todayLogs = worklogs.filter((w) => (w.started || '').slice(0, 10) === targetDate)
+    const todaySeconds = todayLogs.reduce((sum, w) => sum + (Number(w.timeSpentSeconds) || 0), 0)
+    const todayHours = Math.round((todaySeconds / 3600) * 10) / 10
+
+    // Month total
+    const monthSeconds = worklogs.reduce((sum, w) => sum + (Number(w.timeSpentSeconds) || 0), 0)
+    const monthHours = Math.round((monthSeconds / 3600) * 10) / 10
+
+    // Day of week
+    const dateObj = new Date(`${targetDate}T12:00:00+07:00`)
+    const dayOfWeekIdx = dateObj.getDay()
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+    const isWeekend = dayOfWeekIdx === 0 || dayOfWeekIdx === 6
+    const isWorkday = !isWeekend
+
+    const targetHours = isWorkday ? 8 : 0
+    const remainingHours = isWorkday ? Math.max(0, Math.round((targetHours - todayHours) * 10) / 10) : 0
+    const percent = targetHours > 0 ? Math.min(100, Math.round((todayHours / targetHours) * 100)) : (isWeekend ? 100 : 0)
+    const isCompleted = isWorkday ? todayHours >= targetHours : true
+
+    const items = todayLogs.map((w) => ({
+      key: w.issue?.key || '',
+      summary: w.issue?.summary || '',
+      timeSpent: w.timeSpent || '',
+      seconds: w.timeSpentSeconds || 0,
+      hours: Math.round(((w.timeSpentSeconds || 0) / 3600) * 10) / 10,
+      comment: (w.comment || '').trim(),
+      started: w.started,
+    }))
+
+    // Find the most recent day with logged work in this month
+    const datesWithLogs = Array.from(new Set(worklogs.map((w) => (w.started || '').slice(0, 10)))).sort().reverse()
+    const latestLoggedDate = datesWithLogs.find((d) => d !== targetDate) || null
+
+    let latestLoggedInfo = null
+    if (latestLoggedDate && latestLoggedDate !== targetDate) {
+      const logs = worklogs.filter((w) => (w.started || '').slice(0, 10) === latestLoggedDate)
+      const secs = logs.reduce((sum, w) => sum + (Number(w.timeSpentSeconds) || 0), 0)
+      const hrs = Math.round((secs / 3600) * 10) / 10
+      const dObj = new Date(`${latestLoggedDate}T12:00:00+07:00`)
+      latestLoggedInfo = {
+        date: latestLoggedDate,
+        dayOfWeek: dayNames[dObj.getDay()],
+        loggedHours: hrs,
+        itemsCount: logs.length,
+      }
+    }
+
+    const payload = {
+      date: targetDate,
+      dayOfWeek: dayNames[dayOfWeekIdx],
+      dayOfWeekIdx,
+      isWorkday,
+      isWeekend,
+      targetHours,
+      todayLoggedSeconds: todaySeconds,
+      todayLoggedHours: todayHours,
+      remainingHours,
+      percent,
+      isCompleted,
+      monthLoggedHours: monthHours,
+      items,
+      latestLoggedInfo,
+      cachedAt: new Date().toISOString(),
+    }
+
+    tempoCache = {
+      timestamp: nowMs,
+      data: payload,
+      key: cacheKey,
+    }
+
+    res.json(payload)
+  } catch (err) {
+    console.error('Lỗi API /api/tempo-today:', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // Clear Doc APIs

@@ -1,5 +1,6 @@
 // App header (ui.md §2, §15): title + last-sync, Refresh, dark-mode toggle, profile.
 import { RefreshCw, Moon, Sun, Loader2, CheckCircle2, AlertCircle, User } from 'lucide-react'
+import { TempoHeaderButton } from './TempoReminder.jsx'
 
 // Sync-state line (ui.md §15).
 function SyncLine({ status, lastRefresh }) {
@@ -35,6 +36,7 @@ export default function Header({ lastRefresh, syncStatus, onRefresh, isDark, onT
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <TempoHeaderButton />
           <button
             onClick={onRefresh} disabled={syncStatus === 'loading'}
             className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"

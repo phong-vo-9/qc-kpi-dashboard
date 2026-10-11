@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar } from '../components/ui.jsx'
 import { jiraUrl } from '../lib/api.js'
+import { TempoReminderCard } from '../components/TempoReminder.jsx'
 
 function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClass }) {
   const [expanded, setExpanded] = useState(false)
@@ -625,6 +626,9 @@ export default function Overview({ kpi, tasks = [], onNavigateToTask, sprintAnal
 
   return (
     <div className="space-y-6">
+      {/* Nhắc nhở log work Tempo 8h/ngày (Thứ 2 - Thứ 6) */}
+      <TempoReminderCard />
+
       {/* KPI cards — primary overview, directly below the global filters */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         <KpiCard icon={ClipboardList} entity="task" label="Total Task" value={kpi.total}
