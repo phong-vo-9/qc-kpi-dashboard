@@ -3,14 +3,17 @@ import {
   Award, ClipboardList, ClipboardCheck, ListChecks, PencilRuler, Scale, Bug,
   Bot, CheckCircle2, CircleAlert, ChevronDown, ExternalLink, Gauge, Calendar,
   Info, Search, RotateCcw, CircleDot, Layers, BarChart2,
-  FileText, FileCheck2, HelpCircle, CheckCircle, MinusCircle, MessageSquare, Sparkles
+  FileText, FileCheck2, HelpCircle, CheckCircle, MinusCircle, MessageSquare, Sparkles,
+  Headphones, Clock
 } from 'lucide-react'
 import { KpiCard, Panel, ProgressBar, Stat, Badge } from '../components/ui.jsx'
 import { PieCard, BarCard, LineCard } from '../components/charts.jsx'
 import { ENTITY, ramp } from '../lib/tokens.js'
 import { api, jiraUrl } from '../lib/api.js'
+import BscItsPanel from './bsc/BscItsPanel.jsx'
+import BscTempoSummaryCard from './bsc/BscTempoSummaryCard.jsx'
 
-export default function BscStats({ mode = 'dark', onNavigateToTask }) {
+export default function BscStats({ mode = 'dark', onNavigateToTask, onNavigateTab }) {
   const e = ENTITY[mode]
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -68,6 +71,8 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
     automationAnalysis = {},
     regressionAnalysis = {},
     clearDocAnalysis = {},
+    itsAnalysis = {},
+    tempoAnalysis = {},
   } = data || {}
 
   const {
@@ -252,8 +257,9 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
         </div>
       </div>
 
-      {/* ─── PHẦN 1: KPI CARDS PANEL (8 THẺ TRÌNH BÀY HỢP LÝ THEO YÊU CẦU 1 & 2) ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+      {/* ─── PHẦN 1: KPI CARDS PANEL (10 THẺ CHỈ SỐ BSC - 2 HÀNG CÂN ĐỐI 5 CỘT) ─── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        {/* HÀNG 1: KHỐI LƯỢNG BÀN GIAO & TRỌNG SỐ BSC (5 THẺ) */}
         {/* 1. Total Task */}
         <KpiCard
           icon={ClipboardList}
@@ -274,7 +280,7 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
           tooltip={`Tổng số issue Type là Bug đã Released (${totalBugIssues} bug). QC Weight của bug: ${totals.bugQcWeight || 0}, Story Points của bug: ${totals.bugStoryPoints || 0}`}
         />
 
-        {/* 3. Bug Subtask (Yêu cầu 2: các bug subtask của task và support) */}
+        {/* 3. Bug Subtask */}
         <KpiCard
           icon={CircleDot}
           entity="bug"
@@ -284,37 +290,7 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
           tooltip={`Tổng cộng ${subtaskBugCount} bug subtask phát sinh gắn trên ${totalBscTasks} Task & Support trong quý`}
         />
 
-        {/* 4. Review */}
-        <KpiCard
-          icon={ClipboardCheck}
-          entity="review"
-          label="Review"
-          value={aggregatesTasks.totalReview || 0}
-          subtitle={`TB ${averages.review} / task`}
-          tooltip="Tổng lượt Review = Review1 + Review2 + Review3 của các task BSC Released"
-        />
-
-        {/* 5. Test Case */}
-        <KpiCard
-          icon={ListChecks}
-          entity="tc"
-          label="Test Case"
-          value={aggregatesTasks.totalTestCase || 0}
-          subtitle={`TB ${averages.testCase} / task`}
-          tooltip="Tổng lượt Test Case = TC1 + TC2 + TC3 của các task BSC Released"
-        />
-
-        {/* 6. Test Design */}
-        <KpiCard
-          icon={PencilRuler}
-          entity="td"
-          label="Test Design"
-          value={aggregatesTasks.totalTestDesign || 0}
-          subtitle={`TB ${averages.testDesign} / task`}
-          tooltip="Tổng lượt Test Design = TD1 + TD2 + TD3 của các task BSC Released"
-        />
-
-        {/* 7. Tổng QC Weight */}
+        {/* 4. Tổng QC Weight */}
         <KpiCard
           icon={Scale}
           entity="qc"
@@ -324,7 +300,7 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
           tooltip={`Tổng QC Weight = Task (${totals.taskQcWeight || 0}) + Bug (${totals.bugQcWeight || 0}) = ${totals.totalQcWeight || 0}`}
         />
 
-        {/* 8. Tổng Story Points */}
+        {/* 5. Tổng Story Points */}
         <KpiCard
           icon={Gauge}
           entity="story"
@@ -332,6 +308,57 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
           value={totals.totalStoryPoints || 0}
           subtitle={`Task: ${totals.taskStoryPoints || 0} · Bug: ${totals.bugStoryPoints || 0}`}
           tooltip={`Tổng Story Points = Task (${totals.taskStoryPoints || 0}) + Bug (${totals.bugStoryPoints || 0}) = ${totals.totalStoryPoints || 0}`}
+        />
+
+        {/* HÀNG 2: HOẠT ĐỘNG KIỂM THỬ, VẬN HÀNH & NĂNG SUẤT (5 THẺ) */}
+        {/* 6. Review */}
+        <KpiCard
+          icon={ClipboardCheck}
+          entity="review"
+          label="Review"
+          value={aggregatesTasks.totalReview || 0}
+          subtitle={`TB ${averages.review} / task`}
+          tooltip="Tổng lượt Review = Review1 + Review2 + Review3 của các task BSC Released"
+        />
+
+        {/* 7. Test Case */}
+        <KpiCard
+          icon={ListChecks}
+          entity="tc"
+          label="Test Case"
+          value={aggregatesTasks.totalTestCase || 0}
+          subtitle={`TB ${averages.testCase} / task`}
+          tooltip="Tổng lượt Test Case = TC1 + TC2 + TC3 của các task BSC Released"
+        />
+
+        {/* 8. Test Design */}
+        <KpiCard
+          icon={PencilRuler}
+          entity="td"
+          label="Test Design"
+          value={aggregatesTasks.totalTestDesign || 0}
+          subtitle={`TB ${averages.testDesign} / task`}
+          tooltip="Tổng lượt Test Design = TD1 + TD2 + TD3 của các task BSC Released"
+        />
+
+        {/* 9. Xử lý ITS (Quý) */}
+        <KpiCard
+          icon={Headphones}
+          entity="its"
+          label="Xử lý ITS"
+          value={itsAnalysis.total || 0}
+          subtitle={`Đã xong: ${itsAnalysis.resolvedCount || 0} (${itsAnalysis.resolvedRate || 0}%)`}
+          tooltip={`Tổng số ${itsAnalysis.total || 0} ticket ITS trong quý. Tỷ lệ đạt SLA: ${itsAnalysis.slaComplianceRate || 100}% (${itsAnalysis.breachedCount || 0} vi phạm)`}
+        />
+
+        {/* 10. Log Work Tempo */}
+        <KpiCard
+          icon={Clock}
+          entity="tempo"
+          label="Log Work Tempo"
+          value={`${tempoAnalysis.totalActualHours || tempoAnalysis.totalLoggedHours || 0}h`}
+          subtitle={`Plan: ${tempoAnalysis.totalPlannedHours || tempoAnalysis.taskTotalPlanHours || 0}h (${tempoAnalysis.completionRate || 0}%)`}
+          tooltip={`Tổng giờ log thực tế Tempo từ tất cả nguồn: ${tempoAnalysis.totalActualHours || 0}h. Giờ kế hoạch (Plan): ${tempoAnalysis.totalPlannedHours || 0}h. Chênh lệch: ${tempoAnalysis.diffHours || 0}h. Vượt plan: ${tempoAnalysis.overloggedCount || 0} task`}
         />
       </div>
 
@@ -370,6 +397,14 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
           </div>
         </Panel>
       </div>
+
+      {/* ─── PHẦN 2.5: TỔNG QUAN GIỜ LÀM & KẾ HOẠCH TEMPO (PLANNED VS ACTUAL TẤT CẢ NGUỒN) ─── */}
+      <BscTempoSummaryCard
+        tempoAnalysis={tempoAnalysis}
+        quarterLabel={quarterLabel}
+        mode={mode}
+        onNavigateTab={onNavigateTab}
+      />
 
       {/* ─── PHẦN 3: THỐNG KÊ BUG BSC (BUG TÔI ĐÃ LOG & BUG ĐÃ FIX) ─── */}
       <Panel
@@ -498,6 +533,13 @@ export default function BscStats({ mode = 'dark', onNavigateToTask }) {
           </div>
         </div>
       </Panel>
+
+      {/* ─── PHẦN 3.5: DỮ LIỆU XỬ LÝ ITS CỦA QUÝ (TIÊU CHÍ MỚI) ─── */}
+      <BscItsPanel
+        itsAnalysis={itsAnalysis}
+        quarterLabel={quarterLabel}
+        mode={mode}
+      />
 
       {/* ─── PHẦN 4: PHÂN TÍCH AUTOMATION THEO TỪNG SPRINT (YÊU CẦU 3: KHÔNG TÍNH REGRESSION TEST) ─── */}
       <Panel

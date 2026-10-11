@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { LayoutDashboard, Table2, Bug, Layers3, Award, FileText, Headphones } from 'lucide-react'
+import { LayoutDashboard, Table2, Bug, Layers3, Award, FileText, Headphones, Clock } from 'lucide-react'
 import Header from './components/Header.jsx'
 import Filters, { EMPTY_FILTERS } from './components/Filters.jsx'
 import { Skeleton } from './components/ui.jsx'
 import Overview from './tabs/Overview.jsx'
 import BscStats from './tabs/BscStats.jsx'
+import TimeManagement from './tabs/TimeManagement.jsx'
 import ClearDoc from './tabs/ClearDoc.jsx'
 import ItsManagement from './tabs/ItsManagement.jsx'
 import Tasks from './tabs/Tasks.jsx'
@@ -17,6 +18,7 @@ import { refreshTempoData } from './components/TempoReminder.jsx'
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'bsc', label: 'Thống kê BSC', icon: Award },
+  { id: 'time', label: 'Quản lý Time', icon: Clock },
   { id: 'clear-doc', label: 'Clear doc', icon: FileText },
   { id: 'its', label: 'Quản lý ITS', icon: Headphones },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
@@ -144,7 +146,7 @@ export default function App() {
         </div>
 
         {/* Global filters (§3) */}
-        {tab !== 'bug-backlog' && tab !== 'bsc' && tab !== 'clear-doc' && tab !== 'its' && (
+        {tab !== 'bug-backlog' && tab !== 'bsc' && tab !== 'clear-doc' && tab !== 'its' && tab !== 'time' && (
           <Filters
             options={options}
             applied={filters}
@@ -160,7 +162,9 @@ export default function App() {
         ) : tab === 'overview' ? (
           <div key={theme}><Overview kpi={kpi} tasks={tasks} onNavigateToTask={handleNavigateToTask} sprintAnalysis={sprintAnalysis} /></div>
         ) : tab === 'bsc' ? (
-          <div key={theme}><BscStats mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
+          <div key={theme}><BscStats mode={mode} onNavigateToTask={handleNavigateToTask} onNavigateTab={setTab} /></div>
+        ) : tab === 'time' ? (
+          <div key={theme}><TimeManagement mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
         ) : tab === 'clear-doc' ? (
           <div key={theme}><ClearDoc tasks={tasks} mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
         ) : tab === 'its' ? (

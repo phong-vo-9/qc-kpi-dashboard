@@ -1,6 +1,6 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
-import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets, fetchTempoWorklogs } from './jira.js'
+import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets, fetchTempoWorklogs, fetchTempoAllocations } from './jira.js'
 import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
@@ -690,7 +690,54 @@ const normalizePersonName = (value) => String(value || '')
   .replace(/[\u0300-\u036f]/g, '')
   .replace(/\s+/g, ' ')
 
-app.get('/api/bsc', (req, res) => {
+const tempoQuarterCache = new Map()
+const tempoQuarterAllocCache = new Map()
+
+function getQuarterDateRange(quarter, year) {
+  const y = Number(year) || new Date().getFullYear()
+  const q = String(quarter || 'Q3').toUpperCase()
+  const map = {
+    Q1: {
+      from: `${y}-01-01`,
+      to: `${y}-03-31`,
+      months: [
+        { key: `${y}-01`, label: 'Tháng 1' },
+        { key: `${y}-02`, label: 'Tháng 2' },
+        { key: `${y}-03`, label: 'Tháng 3' },
+      ],
+    },
+    Q2: {
+      from: `${y}-04-01`,
+      to: `${y}-06-30`,
+      months: [
+        { key: `${y}-04`, label: 'Tháng 4' },
+        { key: `${y}-05`, label: 'Tháng 5' },
+        { key: `${y}-06`, label: 'Tháng 6' },
+      ],
+    },
+    Q3: {
+      from: `${y}-07-01`,
+      to: `${y}-09-30`,
+      months: [
+        { key: `${y}-07`, label: 'Tháng 7' },
+        { key: `${y}-08`, label: 'Tháng 8' },
+        { key: `${y}-09`, label: 'Tháng 9' },
+      ],
+    },
+    Q4: {
+      from: `${y}-10-01`,
+      to: `${y}-12-31`,
+      months: [
+        { key: `${y}-10`, label: 'Tháng 10' },
+        { key: `${y}-11`, label: 'Tháng 11' },
+        { key: `${y}-12`, label: 'Tháng 12' },
+      ],
+    },
+  }
+  return map[q] || map.Q3
+}
+
+app.get('/api/bsc', async (req, res) => {
   const allTasks = getTasks().map(decorate)
   const qcName = process.env.JIRA_QC_NAME || 'Nguyễn Phú Thành'
 
@@ -956,6 +1003,276 @@ app.get('/api/bsc', (req, res) => {
     docs: qDocs,
   }
 
+  // 6. ITS Analysis for this Quarter
+  const allIts = getItsTickets()
+  const quarterIts = allIts.filter((t) => {
+    const matchQ = String(t.quarter || '').toUpperCase() === String(selQuarter || '').toUpperCase()
+    const matchY = Number(t.year) === Number(selYear)
+    return matchQ && matchY
+  })
+
+  const isTicketOpen = (t) => ['open', 'to do', 'todo', 'waiting for support', 'waiting for customer', 'backlog', 'reopened'].includes(String(t.status || '').toLowerCase().trim())
+  const isTicketReviewing = (t) => ['in review', 'reviewing', 'under review', 'testing', 'ready to test', 'in progress', 'pending'].includes(String(t.status || '').toLowerCase().trim())
+  const isTicketResolved = (t) => ['done', 'resolved', 'closed', 'released', 'rejected', 'not reproducible', "won't do", 'cancelled'].includes(String(t.status || '').toLowerCase().trim())
+  const isTicketBreached = (t) => Boolean(t.slaResolutionBreached || t.slaFirstResponseBreached)
+
+  const itsTotal = quarterIts.length
+  const itsOpenCount = quarterIts.filter(isTicketOpen).length
+  const itsReviewingCount = quarterIts.filter(isTicketReviewing).length
+  const itsResolvedCount = quarterIts.filter(isTicketResolved).length
+  const itsResolvedRate = itsTotal > 0 ? Math.round((itsResolvedCount / itsTotal) * 100) : 0
+  const itsBreachedCount = quarterIts.filter(isTicketBreached).length
+  const itsSlaComplianceRate = itsTotal > 0 ? Math.round(((itsTotal - itsBreachedCount) / itsTotal) * 100) : 100
+  const itsResBreachedCount = quarterIts.filter((t) => Boolean(t.slaResolutionBreached)).length
+  const itsRespBreachedCount = quarterIts.filter((t) => Boolean(t.slaFirstResponseBreached)).length
+  const itsLinkedBugsCount = quarterIts.reduce((sum, t) => sum + (Array.isArray(t.linkedBugs) ? t.linkedBugs.length : 0), 0)
+
+  const itsByClassify = {}
+  for (const t of quarterIts) {
+    const c = t.classify || 'Chưa phân loại'
+    itsByClassify[c] = (itsByClassify[c] || 0) + 1
+  }
+
+  const itsByStatus = {}
+  for (const t of quarterIts) {
+    const s = t.status || 'Khác'
+    itsByStatus[s] = (itsByStatus[s] || 0) + 1
+  }
+
+  const itsAnalysis = {
+    total: itsTotal,
+    openCount: itsOpenCount,
+    reviewingCount: itsReviewingCount,
+    resolvedCount: itsResolvedCount,
+    resolvedRate: itsResolvedRate,
+    breachedCount: itsBreachedCount,
+    slaComplianceRate: itsSlaComplianceRate,
+    slaResolutionBreachedCount: itsResBreachedCount,
+    slaFirstResponseBreachedCount: itsRespBreachedCount,
+    linkedBugsCount: itsLinkedBugsCount,
+    byClassify: itsByClassify,
+    byStatus: itsByStatus,
+    tickets: quarterIts,
+  }
+
+  // 7. Tempo Log Work & Plan vs Actual Analysis for this Quarter (Toàn diện từ mọi nguồn)
+  const qRange = getQuarterDateRange(selQuarter, selYear)
+  const qCacheKey = `${selQuarter}-${selYear}`
+  const nowMs = Date.now()
+  const force = req.query.force === '1' || req.query.force === 'true'
+
+  let tempoWorklogs = []
+  const cachedTempo = tempoQuarterCache.get(qCacheKey)
+  if (!force && cachedTempo && nowMs - cachedTempo.timestamp < 180000) {
+    tempoWorklogs = cachedTempo.data
+  } else {
+    try {
+      tempoWorklogs = await fetchTempoWorklogs(qRange.from, qRange.to)
+      tempoQuarterCache.set(qCacheKey, { data: tempoWorklogs, timestamp: nowMs })
+    } catch (err) {
+      console.error('Không thể lấy Tempo worklogs của quý:', err.message)
+      tempoWorklogs = []
+    }
+  }
+
+  let tempoAllocations = []
+  const cachedAlloc = tempoQuarterAllocCache.get(qCacheKey)
+  if (!force && cachedAlloc && nowMs - cachedAlloc.timestamp < 180000) {
+    tempoAllocations = cachedAlloc.data
+  } else {
+    try {
+      tempoAllocations = await fetchTempoAllocations(qRange.from, qRange.to)
+      tempoQuarterAllocCache.set(qCacheKey, { data: tempoAllocations, timestamp: nowMs })
+    } catch (err) {
+      console.error('Không thể lấy Tempo allocations của quý:', err.message)
+      tempoAllocations = []
+    }
+  }
+
+  // Tổng giờ Actual & Planned từ toàn bộ nguồn
+  const totalActualSeconds = tempoWorklogs.reduce((sum, w) => sum + (Number(w.timeSpentSeconds) || 0), 0)
+  const totalActualHours = Math.round((totalActualSeconds / 3600) * 10) / 10
+
+  const totalPlannedSeconds = tempoAllocations.reduce((sum, item) => sum + (Number(item.seconds) || 0), 0)
+  const totalPlannedHours = Math.round((totalPlannedSeconds / 3600) * 10) / 10
+
+  const completionRate = totalPlannedHours > 0
+    ? Math.round((totalActualHours / totalPlannedHours) * 100)
+    : 0
+  const diffHours = Math.round((totalActualHours - totalPlannedHours) * 10) / 10
+
+  // Phân tích theo từng dự án (Project Breakdown: GOP, SSD, AW, ITS...)
+  const projectMap = new Map()
+  for (const item of tempoAllocations) {
+    const pKey = item.planItem?.project?.key || item.planItem?.key?.split('-')[0] || 'Khác'
+    if (!projectMap.has(pKey)) {
+      projectMap.set(pKey, { project: pKey, plannedSec: 0, actualSec: 0 })
+    }
+    projectMap.get(pKey).plannedSec += (Number(item.seconds) || 0)
+  }
+  for (const w of tempoWorklogs) {
+    const pKey = w.issue?.projectKey || w.issue?.key?.split('-')[0] || 'Khác'
+    if (!projectMap.has(pKey)) {
+      projectMap.set(pKey, { project: pKey, plannedSec: 0, actualSec: 0 })
+    }
+    projectMap.get(pKey).actualSec += (Number(w.timeSpentSeconds) || 0)
+  }
+
+  const projectsBreakdown = [...projectMap.values()].map((p) => {
+    const plannedHours = Math.round((p.plannedSec / 3600) * 10) / 10
+    const actualHours = Math.round((p.actualSec / 3600) * 10) / 10
+    const pDiff = Math.round((actualHours - plannedHours) * 10) / 10
+    const rate = plannedHours > 0 ? Math.round((actualHours / plannedHours) * 100) : (actualHours > 0 ? 100 : 0)
+    return {
+      project: p.project,
+      plannedHours,
+      actualHours,
+      diffHours: pDiff,
+      completionRate: rate,
+    }
+  }).sort((a, b) => b.plannedHours - a.plannedHours || b.actualHours - a.actualHours)
+
+  // Phân tích theo từng tháng trong Quý (Planned vs Actual cả 3 tháng)
+  const monthlyBreakdown = qRange.months.map((mObj) => {
+    const pAlloc = tempoAllocations.filter((item) => (item.start || item.startDate || '').startsWith(mObj.key))
+    const pSec = pAlloc.reduce((sum, item) => sum + (Number(item.seconds) || 0), 0)
+    const pHours = Math.round((pSec / 3600) * 10) / 10
+
+    const aLogs = tempoWorklogs.filter((w) => (w.started || '').startsWith(mObj.key))
+    const aSec = aLogs.reduce((sum, w) => sum + (Number(w.timeSpentSeconds) || 0), 0)
+    const aHours = Math.round((aSec / 3600) * 10) / 10
+
+    const mRate = pHours > 0 ? Math.round((aHours / pHours) * 100) : 0
+    const mDiff = Math.round((aHours - pHours) * 10) / 10
+
+    return {
+      key: mObj.key,
+      label: mObj.label,
+      plannedSeconds: pSec,
+      plannedHours: pHours,
+      actualSeconds: aSec,
+      actualHours: aHours,
+      completionRate: mRate,
+      diffHours: mDiff,
+      worklogsCount: aLogs.length,
+    }
+  })
+
+  // Hợp nhất toàn bộ các task / work items từ cả Plan và Actual của mọi nguồn
+  const itemMap = new Map()
+  for (const item of tempoAllocations) {
+    const k = item.planItem?.key || (item.planItem?.id ? String(item.planItem.id) : null)
+    if (!k) continue
+    if (!itemMap.has(k)) {
+      itemMap.set(k, {
+        key: k,
+        summary: item.description || item.planItem?.summary || '',
+        project: k.split('-')[0],
+        planSeconds: 0,
+        loggedSeconds: 0,
+      })
+    }
+    const entry = itemMap.get(k)
+    entry.planSeconds += (Number(item.seconds) || 0)
+    if (item.description && !entry.summary) entry.summary = item.description
+  }
+
+  for (const w of tempoWorklogs) {
+    const k = w.issue?.key
+    if (!k) continue
+    if (!itemMap.has(k)) {
+      itemMap.set(k, {
+        key: k,
+        summary: w.issue?.summary || '',
+        project: w.issue?.projectKey || k.split('-')[0],
+        planSeconds: 0,
+        loggedSeconds: 0,
+      })
+    }
+    const entry = itemMap.get(k)
+    entry.loggedSeconds += (Number(w.timeSpentSeconds) || 0)
+    if (w.issue?.summary && !entry.summary) entry.summary = w.issue.summary
+  }
+
+  let overloggedTasksCount = 0
+  let totalOverloggedSeconds = 0
+  let onTrackTasksCount = 0
+  let missingPlanTasksCount = 0
+
+  const allItemsList = [...itemMap.values()].map((item) => {
+    const plan = item.planSeconds
+    const logged = item.loggedSeconds
+    let statusType = 'on_track'
+
+    if (plan === 0) {
+      missingPlanTasksCount++
+      statusType = 'missing_plan'
+    } else if (logged > plan) {
+      overloggedTasksCount++
+      totalOverloggedSeconds += (logged - plan)
+      statusType = 'overlogged'
+    } else {
+      onTrackTasksCount++
+      statusType = 'on_track'
+    }
+
+    const diffSeconds = logged - plan
+    const pct = plan > 0 ? Math.round((logged / plan) * 100) : null
+
+    return {
+      key: item.key,
+      summary: item.summary || '',
+      project: item.project || '',
+      planSeconds: plan,
+      planHours: Math.round((plan / 3600) * 10) / 10,
+      loggedSeconds: logged,
+      loggedHours: Math.round((logged / 3600) * 10) / 10,
+      diffHours: Math.round((diffSeconds / 3600) * 10) / 10,
+      pct,
+      statusType,
+    }
+  })
+
+  // Sắp xếp: Vượt plan lên trước, sau đó là actual hours giảm dần
+  allItemsList.sort((a, b) => {
+    if (a.statusType === 'overlogged' && b.statusType !== 'overlogged') return -1
+    if (b.statusType === 'overlogged' && a.statusType !== 'overlogged') return 1
+    return (b.loggedSeconds || 0) - (a.loggedSeconds || 0)
+  })
+
+  const totalOverloggedHours = Math.round((totalOverloggedSeconds / 3600) * 10) / 10
+
+  const tempoAnalysis = {
+    totalPlannedSeconds,
+    totalPlannedHours,
+    totalActualSeconds,
+    totalActualHours,
+    totalLoggedSeconds: totalActualSeconds,
+    totalLoggedHours: totalActualHours,
+    taskTotalPlanHours: totalPlannedHours,
+    taskTotalLoggedHours: totalActualHours,
+    completionRate,
+    planCompletionRate: completionRate,
+    diffHours,
+    totalOverloggedHours,
+    dateRange: { from: qRange.from, to: qRange.to },
+    months: monthlyBreakdown,
+    projects: projectsBreakdown,
+    overloggedCount: overloggedTasksCount,
+    onTrackCount: onTrackTasksCount,
+    missingPlanCount: missingPlanTasksCount,
+    tasks: allItemsList,
+    tempoReportUrl: `https://jira.vexere.net/secure/Tempo.jspa#/reports/planned-vs-actual/bc868685-a3b5-4fba-b024-d57f97612057?chartType=DONUT&from=${qRange.from}&groupBy=project&subType=MONTH&to=${qRange.to}&type=FIXED&worker=JIRAUSER14615`,
+  }
+
+  totals.itsTotal = itsAnalysis.total
+  totals.itsResolved = itsAnalysis.resolvedCount
+  totals.itsResolvedRate = itsAnalysis.resolvedRate
+  totals.itsBreached = itsAnalysis.breachedCount
+  totals.tempoLoggedHours = tempoAnalysis.totalActualHours
+  totals.tempoPlanHours = tempoAnalysis.totalPlannedHours
+  totals.tempoCompletionRate = tempoAnalysis.completionRate
+
   res.json({
     quarter: selQuarter,
     year: selYear,
@@ -974,6 +1291,8 @@ app.get('/api/bsc', (req, res) => {
     automationAnalysis,
     regressionAnalysis,
     clearDocAnalysis,
+    itsAnalysis,
+    tempoAnalysis,
   })
 })
 

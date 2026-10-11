@@ -171,6 +171,44 @@ async function fetchTempoAllocationsMap(e, headers) {
   }
 }
 
+export async function fetchTempoAllocations(startDate, endDate, workerOverride) {
+  const e = env()
+  const worker = (workerOverride || process.env.JIRA_USER_KEY || 'JIRAUSER14615').toLowerCase()
+  const q = (e.qcName || e.user || '').toLowerCase()
+  const headers = {
+    Authorization: authHeader(e),
+    Accept: 'application/json',
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 35000)
+  try {
+    const res = await fetch(
+      `${e.url}/rest/tempo-planning/1/allocation?startDate=${startDate}&endDate=${endDate}`,
+      { headers, signal: controller.signal }
+    )
+    clearTimeout(timeout)
+    if (!res.ok) return []
+    const list = await res.json()
+    if (!Array.isArray(list)) return []
+
+    return list.filter((item) => {
+      const aUserKey = (item.assignee?.userKey || '').toLowerCase()
+      const aKey = (item.assignee?.key || '').toLowerCase()
+      return (
+        aUserKey === worker ||
+        aKey === worker ||
+        aKey.includes('phuthanh') ||
+        aUserKey.includes('phuthanh') ||
+        (q && (aKey.includes(q) || aUserKey.includes(q)))
+      )
+    })
+  } catch (err) {
+    clearTimeout(timeout)
+    console.error('Không thể lấy danh sách Tempo allocations:', err.message)
+    return []
+  }
+}
+
 export async function fetchTempoWorklogs(from, to, workerOverride) {
   const e = env()
   const worker = workerOverride || process.env.JIRA_USER_KEY || 'JIRAUSER14615'

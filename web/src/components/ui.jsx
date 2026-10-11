@@ -10,10 +10,13 @@ const ENTITY_CHIP = {
   qc: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400',
   story: 'bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400',
   bug: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400',
+  its: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-400',
+  tempo: 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
 }
 const ENTITY_BAR = {
   task: 'bg-blue-500', review: 'bg-green-500', tc: 'bg-violet-500',
   td: 'bg-orange-500', qc: 'bg-indigo-500', story: 'bg-teal-500', bug: 'bg-red-500',
+  its: 'bg-cyan-500', tempo: 'bg-amber-500',
 }
 
 // A surface panel (charts, tables, grouped content).
@@ -36,16 +39,26 @@ export function KpiCard({ icon: Icon, label, value, subtitle, entity = 'task', t
   return (
     <div
       title={tooltip}
-      className="animate-fade-in bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm p-4 transition-transform hover:-translate-y-0.5 hover:shadow-md"
+      className="animate-fade-in bg-white dark:bg-neutral-900 rounded-xl border border-gray-200/90 dark:border-neutral-800 shadow-2xs p-3.5 sm:p-4 transition-all hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between min-h-[106px]"
     >
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${ENTITY_CHIP[entity]}`}>
-          {Icon && <Icon size={18} strokeWidth={2.2} />}
-        </span>
-        <span className="text-sm text-gray-500 dark:text-gray-400">{label}</span>
+      <div>
+        <div className="flex items-center gap-2 mb-2 min-w-0">
+          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${ENTITY_CHIP[entity]}`}>
+            {Icon && <Icon size={16} strokeWidth={2.2} />}
+          </span>
+          <span className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-gray-300 truncate" title={label}>
+            {label}
+          </span>
+        </div>
+        <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-50 tabular-nums tracking-tight">
+          {value}
+        </div>
       </div>
-      <div className="text-3xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">{value}</div>
-      {subtitle != null && <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">{subtitle}</div>}
+      {subtitle != null && (
+        <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 truncate" title={typeof subtitle === 'string' ? subtitle : ''}>
+          {subtitle}
+        </div>
+      )}
     </div>
   )
 }
