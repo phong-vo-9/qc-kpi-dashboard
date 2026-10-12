@@ -3,7 +3,9 @@ import { api } from '../../lib/api.js'
 import {
   isRegressionTask,
   formatBscTsv,
-  formatMarkdownReport
+  formatMarkdownReport,
+  formatImproveDocTsv,
+  formatImproveDocMarkdown
 } from './cleardoc-utils.js'
 import { ClearDocHeader } from './ClearDocHeader.jsx'
 import { ClearDocKpiCards } from './ClearDocKpiCards.jsx'
@@ -13,11 +15,15 @@ import { ClearDocTrackingTable } from './ClearDocTrackingTable.jsx'
 import { ClearDocModal } from './ClearDocModal.jsx'
 import { ClearDocAiModal } from './ClearDocAiModal.jsx'
 import { ClearDocToast, ClearDocConfirmDialog } from './ClearDocFeedback.jsx'
+import { ImproveDocTable } from './ImproveDocTable.jsx'
+import { ImproveDocKpiCards } from './ImproveDocKpiCards.jsx'
+import { ImproveDocModal } from './ImproveDocModal.jsx'
 
 export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }) {
   // Dữ liệu từ backend
   const [clearDocs, setClearDocs] = useState([])
   const [taskStatuses, setTaskStatuses] = useState({})
+  const [improveDocs, setImproveDocs] = useState([])
   const [loading, setLoading] = useState(true)
 
   // Feedback: Toast & Confirm Dialog
@@ -53,14 +59,15 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
   const [search, setSearch] = useState('')
   const [quickTag, setQuickTag] = useState('') // 'multi_task' | 'has_url' | 'multi_issue'
 
-  // Chế độ xem: 'docs' (Bảng Clear doc) | 'tracking' (Tiến độ Clear doc từng Task)
+  // Chế độ xem: 'docs' (Bảng Clear doc) | 'tracking' (Tiến độ Clear doc từng Task) | 'improve' (Bảng Improve doc)
   const [viewMode, setViewMode] = useState('docs')
   const [trackingFilter, setTrackingFilter] = useState('all') // 'all' | 'pending' | 'cleared' | 'not_needed'
+  const [improveCardFilter, setImproveCardFilter] = useState('all') // 'all' | 'pending' | 'has_card'
 
   // Checkbox chọn nhiều task ở tab tracking để gộp nhanh
   const [selectedTaskKeysForGroup, setSelectedTaskKeysForGroup] = useState([])
 
-  // Modal Thêm / Chỉnh sửa tiêu chuẩn
+  // Modal Thêm / Chỉnh sửa tiêu chuẩn Clear Doc
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState({
@@ -78,18 +85,36 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
   // Modal AI Tự động điền dữ liệu
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
 
-  // Tải danh sách Clear doc và Task statuses từ Backend
+  // Modal & Form Improve Doc
+  const [isImproveModalOpen, setIsImproveModalOpen] = useState(false)
+  const [editingImproveId, setEditingImproveId] = useState(null)
+  const [copiedImproveId, setCopiedImproveId] = useState(null)
+  const [improveFormData, setImproveFormData] = useState({
+    originTaskKey: '',
+    targetTaskKey: '',
+    slackUrl: '',
+    content: '',
+    resolution: '',
+    project: 'GOP',
+    sprint: '',
+    quarter: '',
+    year: '',
+  })
+
+  // Tải danh sách Clear doc, Task statuses và Improve doc từ Backend
   const loadClearDocs = useCallback(async () => {
     setLoading(true)
     try {
-      const [docs, statuses] = await Promise.all([
+      const [docs, statuses, improves] = await Promise.all([
         api('/api/clear-docs'),
         api('/api/clear-docs/task-status'),
+        api('/api/improve-docs'),
       ])
       setClearDocs(Array.isArray(docs) ? docs : [])
       setTaskStatuses(statuses || {})
+      setImproveDocs(Array.isArray(improves) ? improves : [])
     } catch (err) {
-      console.error('Lỗi khi tải dữ liệu Clear doc:', err)
+      console.error('Lỗi khi tải dữ liệu Clear doc & Improve doc:', err)
       showToast('Lỗi khi tải dữ liệu: ' + err.message, 'error')
     } finally {
       setLoading(false)
@@ -277,6 +302,68 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
       coverageRate,
     }
   }, [filteredDocs, currentScopeTasks, taskToClearDocMap, taskStatuses])
+
+  // Lọc danh sách Improve Doc theo bộ lọc
+  const filteredImproveDocs = useMemo(() => {
+    return improveDocs.filter((doc) => {
+      if (filterProject && filterProject !== 'all' && doc.project !== filterProject) return false
+      if (filterQuarter && filterQuarter !== 'all') {
+        const [q, y] = filterQuarter.split('-')
+        if (doc.quarter !== q || String(doc.year) !== y) {
+          const t = taskMap.get(doc.originTaskKey)
+          if (!t || t.quarter !== q || String(t.year) !== y) return false
+        }
+      }
+      if (filterSprint && filterSprint !== 'all') {
+        if (doc.sprint !== filterSprint) {
+          const t = taskMap.get(doc.originTaskKey)
+          if (!t || t.sprint !== filterSprint) return false
+        }
+      }
+
+      if (improveCardFilter === 'pending' && doc.targetTaskKey && doc.targetTaskKey.trim()) return false
+      if (improveCardFilter === 'has_card' && (!doc.targetTaskKey || !doc.targetTaskKey.trim())) return false
+
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        const inOrigin = (doc.originTaskKey || '').toLowerCase().includes(q)
+        const inTarget = (doc.targetTaskKey || '').toLowerCase().includes(q)
+        const inContent = (doc.content || '').toLowerCase().includes(q)
+        const inRes = (doc.resolution || '').toLowerCase().includes(q)
+        if (!inOrigin && !inTarget && !inContent && !inRes) return false
+      }
+
+      return true
+    })
+  }, [improveDocs, filterProject, filterQuarter, filterSprint, improveCardFilter, search])
+
+  // Thống kê Improve Doc (cho Mini KPI cards)
+  const improveStats = useMemo(() => {
+    let pool = improveDocs
+    if (filterProject && filterProject !== 'all') pool = pool.filter((d) => d.project === filterProject)
+    if (filterQuarter && filterQuarter !== 'all') {
+      const [q, y] = filterQuarter.split('-')
+      pool = pool.filter((d) => {
+        if (d.quarter === q && String(d.year) === y) return true
+        const t = taskMap.get(d.originTaskKey)
+        return Boolean(t && t.quarter === q && String(t.year) === y)
+      })
+    }
+    if (filterSprint && filterSprint !== 'all') {
+      pool = pool.filter((d) => {
+        if (d.sprint === filterSprint) return true
+        const t = taskMap.get(d.originTaskKey)
+        return Boolean(t && t.sprint === filterSprint)
+      })
+    }
+
+    const total = pool.length
+    const uniqueOriginTasks = new Set(pool.map((d) => d.originTaskKey).filter(Boolean)).size
+    const pendingCards = pool.filter((d) => !d.targetTaskKey || !d.targetTaskKey.trim()).length
+    const hasCards = pool.filter((d) => Boolean(d.targetTaskKey && d.targetTaskKey.trim())).length
+
+    return { total, uniqueOriginTasks, pendingCards, hasCards }
+  }, [improveDocs, filterProject, filterQuarter, filterSprint, taskMap])
 
   // Mở Drawer chi tiết
   const handleOpenDocDrawer = (doc) => {
@@ -523,6 +610,156 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
     })
   }
 
+  // ─── IMPROVE DOC HANDLERS ───
+  const handleOpenAddImproveModal = (defaultTaskKey = '') => {
+    setEditingImproveId(null)
+    const t = defaultTaskKey ? taskMap.get(defaultTaskKey) : null
+    setImproveFormData({
+      originTaskKey: defaultTaskKey || '',
+      targetTaskKey: '',
+      slackUrl: '',
+      content: '',
+      resolution: '',
+      project: t?.project || (filterProject !== 'all' ? filterProject : 'GOP'),
+      sprint: t?.sprint || (filterSprint !== 'all' ? filterSprint : ''),
+      quarter: t?.quarter || (filterQuarter !== 'all' ? filterQuarter.split('-')[0] : ''),
+      year: t?.year || (filterQuarter !== 'all' ? filterQuarter.split('-')[1] : ''),
+    })
+    setIsImproveModalOpen(true)
+  }
+
+  const handleOpenEditImproveModal = async (doc, isQuickSave = false) => {
+    if (isQuickSave) {
+      try {
+        await api(`/api/improve-docs/${doc.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(doc),
+        })
+        setImproveDocs((prev) => prev.map((d) => (d.id === doc.id ? doc : d)))
+        showToast('Cập nhật link Slack thành công!', 'success')
+      } catch (err) {
+        showToast('Lỗi cập nhật: ' + err.message, 'error')
+      }
+      return
+    }
+
+    setEditingImproveId(doc.id)
+    setImproveFormData({
+      originTaskKey: doc.originTaskKey,
+      targetTaskKey: doc.targetTaskKey || '',
+      slackUrl: doc.slackUrl || '',
+      content: doc.content || '',
+      resolution: doc.resolution || '',
+      project: doc.project || 'GOP',
+      sprint: doc.sprint || '',
+      quarter: doc.quarter || '',
+      year: doc.year || '',
+    })
+    setIsImproveModalOpen(true)
+  }
+
+  const handleSaveImproveModal = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    if (!improveFormData.originTaskKey.trim()) {
+      showToast('Vui lòng chọn hoặc nhập Task gốc!', 'warning')
+      return
+    }
+    if (!improveFormData.content.trim()) {
+      showToast('Vui lòng nhập nội dung Improve!', 'warning')
+      return
+    }
+
+    try {
+      if (editingImproveId) {
+        await api(`/api/improve-docs/${editingImproveId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(improveFormData),
+        })
+        showToast('Cập nhật Improve Doc thành công!', 'success')
+      } else {
+        await api('/api/improve-docs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(improveFormData),
+        })
+        showToast('Thêm mới Improve Doc thành công!', 'success')
+      }
+      setIsImproveModalOpen(false)
+      loadClearDocs()
+    } catch (err) {
+      showToast('Lỗi khi lưu Improve Doc: ' + err.message, 'error')
+    }
+  }
+
+  const handleUpdateImproveTargetCard = async (id, targetTaskKey) => {
+    try {
+      await api(`/api/improve-docs/${id}/target-card`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTaskKey }),
+      })
+      setImproveDocs((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, targetTaskKey } : d))
+      )
+      showToast(targetTaskKey ? `Đã gán card ${targetTaskKey}!` : 'Đã chuyển về Chưa bổ sung card', 'success')
+    } catch (err) {
+      showToast('Lỗi khi gán card: ' + err.message, 'error')
+    }
+  }
+
+  const handleDeleteImproveDoc = (id) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Xóa vấn đề Improve Doc',
+      message: 'Bạn có chắc chắn muốn xóa mục Improve này? Thao tác này không thể hoàn tác.',
+      confirmText: 'Xóa ngay',
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          await api(`/api/improve-docs/${id}`, { method: 'DELETE' })
+          setImproveDocs((prev) => prev.filter((d) => d.id !== id))
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+          showToast('Đã xóa mục Improve Doc thành công!', 'success')
+        } catch (err) {
+          showToast('Lỗi khi xóa: ' + err.message, 'error')
+        }
+      },
+    })
+  }
+
+  const handleCopyImproveContent = (doc) => {
+    const text = `Task gốc: ${doc.originTaskKey}\nCard xử lý: ${doc.targetTaskKey || 'Chưa bổ sung card'}\nSlack: ${doc.slackUrl || '—'}\nNội dung: ${doc.content}\nHướng xử lý: ${doc.resolution || '—'}`
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedImproveId(doc.id)
+      setTimeout(() => setCopiedImproveId(null), 2000)
+      showToast('Đã sao chép nội dung Improve!', 'success')
+    })
+  }
+
+  const handleCopyImproveTsv = () => {
+    if (filteredImproveDocs.length === 0) {
+      showToast('Không có dữ liệu Improve Doc để sao chép!', 'warning')
+      return
+    }
+    const tsv = formatImproveDocTsv(filteredImproveDocs, taskMap)
+    navigator.clipboard.writeText(tsv).then(() => {
+      showToast(`Đã sao chép ${filteredImproveDocs.length} dòng Improve TSV vào Clipboard!`, 'success')
+    })
+  }
+
+  const handleCopyImproveMarkdown = () => {
+    if (filteredImproveDocs.length === 0) {
+      showToast('Không có dữ liệu Improve Doc để sao chép!', 'warning')
+      return
+    }
+    const md = formatImproveDocMarkdown(filteredImproveDocs, taskMap, improveStats)
+    navigator.clipboard.writeText(md).then(() => {
+      showToast('Đã sao chép báo cáo Improve Markdown vào Clipboard!', 'success')
+    })
+  }
+
   // Click vào KPI Card để điều hướng nhanh
   const handleKpiCardClick = (targetScope) => {
     setViewMode('tracking')
@@ -535,6 +772,7 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
     setFilterSprint('all')
     setSearch('')
     setQuickTag('')
+    setImproveCardFilter('all')
     showToast('Đã đặt lại bộ lọc về mặc định', 'info')
   }
 
@@ -542,7 +780,9 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
     <div className="space-y-5">
       {/* ─── THANH CÔNG CỤ LỌC & HÀNH ĐỘNG ─── */}
       <ClearDocHeader
+        viewMode={viewMode}
         filteredDocsCount={filteredDocs.length}
+        filteredImproveDocsCount={filteredImproveDocs.length}
         filterProject={filterProject}
         setFilterProject={setFilterProject}
         availableProjects={availableProjects}
@@ -559,15 +799,26 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
         onResetFilters={handleResetFilters}
         onOpenAiModal={() => setIsAiModalOpen(true)}
         onOpenAddModal={() => handleOpenAddModal(selectedTaskKeysForGroup)}
+        onOpenAddImproveModal={() => handleOpenAddImproveModal()}
         onCopyBscTsv={handleCopyBscTsv}
         onCopyMarkdownReport={handleCopyMarkdownReport}
+        onCopyImproveTsv={handleCopyImproveTsv}
+        onCopyImproveMarkdown={handleCopyImproveMarkdown}
       />
 
       {/* ─── KPI MINI CARDS TƯƠNG TÁC (CLICK-TO-FILTER) ─── */}
-      <ClearDocKpiCards
-        stats={stats}
-        onCardClick={handleKpiCardClick}
-      />
+      {viewMode === 'improve' ? (
+        <ImproveDocKpiCards
+          stats={improveStats}
+          cardFilter={improveCardFilter}
+          onFilterChange={setImproveCardFilter}
+        />
+      ) : (
+        <ClearDocKpiCards
+          stats={stats}
+          onCardClick={handleKpiCardClick}
+        />
+      )}
 
       {/* ─── THANH CHUYỂN ĐỔI CHẾ ĐỘ XEM (VIEW TOGGLE) ─── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -592,11 +843,32 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
           >
             Quản lý Task trong Sprint ({currentScopeTasks.length})
           </button>
+          <button
+            onClick={() => setViewMode('improve')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              viewMode === 'improve'
+                ? 'bg-white dark:bg-neutral-900 text-purple-600 dark:text-purple-400 shadow-xs'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            <span>💡 Improve Doc ({filteredImproveDocs.length})</span>
+            {improveStats.pendingCards > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                {improveStats.pendingCards} chờ card
+              </span>
+            )}
+          </button>
         </div>
 
         {viewMode === 'tracking' && selectedTaskKeysForGroup.length > 0 && (
           <div className="text-xs text-gray-500">
             Đang chọn {selectedTaskKeysForGroup.length} task ở chế độ gộp
+          </div>
+        )}
+
+        {viewMode === 'improve' && (
+          <div className="text-xs text-gray-500">
+            Hiển thị {filteredImproveDocs.length} vấn đề cải tiến
           </div>
         )}
       </div>
@@ -636,6 +908,21 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
         />
       )}
 
+      {/* ─── CHẾ ĐỘ 3: BẢNG IMPROVE DOC ─── */}
+      {viewMode === 'improve' && (
+        <ImproveDocTable
+          docs={filteredImproveDocs}
+          taskMap={taskMap}
+          project={filterProject}
+          onOpenAddModal={(taskKey) => handleOpenAddImproveModal(typeof taskKey === 'string' ? taskKey : '')}
+          onOpenEditModal={handleOpenEditImproveModal}
+          onDeleteDoc={handleDeleteImproveDoc}
+          onUpdateTargetCard={handleUpdateImproveTargetCard}
+          onCopyContent={handleCopyImproveContent}
+          copiedId={copiedImproveId}
+        />
+      )}
+
       {/* ─── SLIDE-OVER DRAWER XEM CHI TIẾT ─── */}
       <ClearDocDrawer
         isOpen={isDrawerOpen}
@@ -659,7 +946,7 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
         showToast={showToast}
       />
 
-      {/* ─── MODAL TIÊU CHUẨN THÊM / SỬA ─── */}
+      {/* ─── MODAL TIÊU CHUẨN THÊM / SỬA CLEAR DOC ─── */}
       <ClearDocModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -671,6 +958,19 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
         availableProjects={availableProjects}
         onSave={handleSaveModal}
         onOpenAiModal={() => setIsAiModalOpen(true)}
+      />
+
+      {/* ─── MODAL TIÊU CHUẨN THÊM / SỬA IMPROVE DOC ─── */}
+      <ImproveDocModal
+        isOpen={isImproveModalOpen}
+        onClose={() => setIsImproveModalOpen(false)}
+        editingId={editingImproveId}
+        formData={improveFormData}
+        setFormData={setImproveFormData}
+        eligibleTasks={eligibleTasks}
+        taskMap={taskMap}
+        availableProjects={availableProjects}
+        onSave={handleSaveImproveModal}
       />
 
       {/* ─── HỘP THOẠI XÁC NHẬN (CONFIRM DIALOG) ─── */}

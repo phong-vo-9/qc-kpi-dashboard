@@ -1,7 +1,7 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
 import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets, fetchTempoWorklogs, fetchTempoAllocations } from './jira.js'
-import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback } from './db.js'
+import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getImproveDocs, saveImproveDoc, updateImproveDocTargetCard, deleteImproveDoc, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 
 const app = express()
@@ -299,6 +299,58 @@ app.post('/api/clear-docs/task-status', (req, res) => {
     } else {
       setClearDocTaskStatus(taskKey, status || 'not_needed', note || '')
     }
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Improve Doc APIs
+app.get('/api/improve-docs', (req, res) => {
+  try {
+    const docs = getImproveDocs(req.query)
+    res.json(docs)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/improve-docs', (req, res) => {
+  try {
+    const doc = req.body
+    if (!doc.id) {
+      doc.id = 'imp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+    }
+    saveImproveDoc(doc)
+    res.json({ success: true, doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/improve-docs/:id', (req, res) => {
+  try {
+    const doc = { ...req.body, id: req.params.id }
+    saveImproveDoc(doc)
+    res.json({ success: true, doc })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.patch('/api/improve-docs/:id/target-card', (req, res) => {
+  try {
+    const { targetTaskKey } = req.body
+    updateImproveDocTargetCard(req.params.id, targetTaskKey)
+    res.json({ success: true, targetTaskKey })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/improve-docs/:id', (req, res) => {
+  try {
+    deleteImproveDoc(req.params.id)
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ error: err.message })

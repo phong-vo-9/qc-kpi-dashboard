@@ -19,7 +19,7 @@ const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
   { id: 'bsc', label: 'Thống kê BSC', icon: Award },
   { id: 'time', label: 'Quản lý Time', icon: Clock },
-  { id: 'clear-doc', label: 'Clear doc', icon: FileText },
+  { id: 'clear-doc', label: 'Clear & Improve doc', icon: FileText },
   { id: 'its', label: 'Quản lý ITS', icon: Headphones },
   { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
   { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
@@ -127,19 +127,19 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Tabs (§1) */}
-        <div className="flex gap-1 p-1 bg-gray-100 dark:bg-neutral-900 rounded-xl w-fit">
+        <div className="flex gap-1 p-1 bg-gray-100 dark:bg-neutral-900 rounded-xl overflow-x-auto max-w-full scrollbar-none items-center">
           {TABS.map((t) => {
             const Icon = t.icon
             const active = tab === t.id
             return (
               <button
                 key={t.id} onClick={() => setTab(t.id)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${active
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${active
                     ? 'bg-white dark:bg-neutral-800 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
               >
-                <Icon size={16} /> {t.label}
+                <Icon size={14} className="shrink-0" /> {t.label}
               </button>
             )
           })}

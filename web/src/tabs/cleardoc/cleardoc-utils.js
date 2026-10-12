@@ -332,3 +332,86 @@ export function formatMarkdownReport(docs, taskMap, stats) {
   })
   return md
 }
+
+/**
+ * Lớp CSS style cho badge Hướng xử lý của Improve Doc
+ */
+export function getResolutionBadgeClasses(res) {
+  const text = String(res || '').trim().toLowerCase()
+  if (!text) {
+    return {
+      bg: 'bg-gray-100 dark:bg-neutral-800',
+      text: 'text-gray-600 dark:text-gray-400',
+      border: 'border-gray-200 dark:border-neutral-700',
+    }
+  }
+  if (text.includes('tách card') || text.includes('card riêng') || text.includes('tạo card')) {
+    return {
+      bg: 'bg-sky-50 dark:bg-sky-500/15',
+      text: 'text-sky-700 dark:text-sky-300',
+      border: 'border-sky-200 dark:border-sky-500/30',
+    }
+  }
+  if (text.includes('bypass') || text.includes('tạm') || text.includes('fix sau')) {
+    return {
+      bg: 'bg-amber-50 dark:bg-amber-500/15',
+      text: 'text-amber-700 dark:text-amber-300',
+      border: 'border-amber-200 dark:border-amber-500/30',
+    }
+  }
+  if (text.includes('đồng bộ') || text.includes('cơ chế') || text.includes('improve')) {
+    return {
+      bg: 'bg-indigo-50 dark:bg-indigo-500/15',
+      text: 'text-indigo-700 dark:text-indigo-300',
+      border: 'border-indigo-200 dark:border-indigo-500/30',
+    }
+  }
+  if (text.includes('ui') || text.includes('enhance') || text.includes('giao diện')) {
+    return {
+      bg: 'bg-fuchsia-50 dark:bg-fuchsia-500/15',
+      text: 'text-fuchsia-700 dark:text-fuchsia-300',
+      border: 'border-fuchsia-200 dark:border-fuchsia-500/30',
+    }
+  }
+  return {
+    bg: 'bg-purple-50 dark:bg-purple-500/15',
+    text: 'text-purple-700 dark:text-purple-300',
+    border: 'border-purple-200 dark:border-purple-500/30',
+  }
+}
+
+/**
+ * Xuất bảng Improve Doc định dạng TSV cho Excel
+ */
+export function formatImproveDocTsv(items, taskMap) {
+  if (!items || items.length === 0) return ''
+  const headers = ['Task gốc', 'Card xử lý', 'Link Slack', 'Nội dung Improve', 'Hướng xử lý đã ghi nhận']
+  const rows = items.map((it) => {
+    const origStr = it.originTaskKey
+    const targetStr = it.targetTaskKey || 'Chưa bổ sung card'
+    const slackStr = it.slackUrl || '—'
+    const contentStr = `"${(it.content || '').replace(/"/g, '""')}"`
+    const resStr = it.resolution || '—'
+    return [origStr, targetStr, slackStr, contentStr, resStr].join('\t')
+  })
+  return [headers.join('\t'), ...rows].join('\n')
+}
+
+/**
+ * Xuất bảng Improve Doc định dạng Markdown chuẩn
+ */
+export function formatImproveDocMarkdown(items, taskMap, stats) {
+  if (!items || items.length === 0) return ''
+  let md = `### 💡 Báo Cáo Improve Doc (${stats?.uniqueOriginTasks || 0} task · ${items.length} vấn đề)\n\n`
+  md += `| Task gốc | Card xử lý | Link Slack | Nội dung Improve | Hướng xử lý |\n`
+  md += `| :--- | :--- | :--- | :--- | :--- |\n`
+  items.forEach((it) => {
+    const cardStr = it.targetTaskKey ? `[${it.targetTaskKey}](https://jira.vexere.net/browse/${it.targetTaskKey})` : '*Chưa bổ sung card*'
+    const slackStr = it.slackUrl ? `[Slack](${it.slackUrl})` : '—'
+    const cleanContent = (it.content || '').replace(/\r?\n/g, ' ')
+    const cleanRes = (it.resolution || '').replace(/\r?\n/g, ' ')
+    md += `| [${it.originTaskKey}](https://jira.vexere.net/browse/${it.originTaskKey}) | ${cardStr} | ${slackStr} | ${cleanContent} | ${cleanRes} |\n`
+  })
+  return md
+}
+

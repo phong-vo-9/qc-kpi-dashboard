@@ -43,6 +43,20 @@ CREATE TABLE IF NOT EXISTS clear_doc_task_status (
   note TEXT,
   updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS improve_docs (
+  id TEXT PRIMARY KEY,
+  origin_task_key TEXT NOT NULL,
+  target_task_key TEXT,
+  slack_url TEXT,
+  content TEXT NOT NULL,
+  resolution TEXT,
+  project TEXT NOT NULL,
+  sprint TEXT,
+  quarter TEXT,
+  year INTEGER,
+  created_at TEXT,
+  updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS its_tickets (
   key TEXT PRIMARY KEY,
   summary TEXT,
@@ -280,6 +294,189 @@ export function setClearDocTaskStatus(taskKey, status = 'not_needed', note = '')
 
 export function deleteClearDocTaskStatus(taskKey) {
   return db.prepare('DELETE FROM clear_doc_task_status WHERE task_key = ?').run(taskKey)
+}
+
+export function getImproveDocs(filters = {}) {
+  let query = 'SELECT * FROM improve_docs'
+  const conditions = []
+  const params = []
+
+  if (filters.project && filters.project !== 'all') {
+    conditions.push('project = ?')
+    params.push(filters.project)
+  }
+  if (filters.quarter && filters.quarter !== 'all') {
+    conditions.push('quarter = ?')
+    params.push(filters.quarter)
+  }
+  if (filters.year && filters.year !== 'all') {
+    conditions.push('year = ?')
+    params.push(Number(filters.year))
+  }
+  if (filters.sprint && filters.sprint !== 'all') {
+    conditions.push('sprint = ?')
+    params.push(filters.sprint)
+  }
+  if (filters.hasTargetCard === 'yes') {
+    conditions.push("target_task_key IS NOT NULL AND TRIM(target_task_key) != ''")
+  } else if (filters.hasTargetCard === 'no') {
+    conditions.push("(target_task_key IS NULL OR TRIM(target_task_key) = '')")
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ')
+  }
+  query += ' ORDER BY created_at DESC'
+
+  const rows = db.prepare(query).all(...params)
+  return rows.map((r) => ({
+    id: r.id,
+    originTaskKey: r.origin_task_key,
+    targetTaskKey: r.target_task_key || '',
+    slackUrl: r.slack_url || '',
+    content: r.content,
+    resolution: r.resolution || '',
+    project: r.project,
+    sprint: r.sprint,
+    quarter: r.quarter,
+    year: r.year,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }))
+}
+
+export function saveImproveDoc(doc) {
+  const stmt = db.prepare(`
+    INSERT INTO improve_docs (
+      id, origin_task_key, target_task_key, slack_url, content, resolution, project, sprint, quarter, year, created_at, updated_at
+    ) VALUES (
+      @id, @origin_task_key, @target_task_key, @slack_url, @content, @resolution, @project, @sprint, @quarter, @year, @created_at, @updated_at
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      origin_task_key = @origin_task_key,
+      target_task_key = @target_task_key,
+      slack_url = @slack_url,
+      content = @content,
+      resolution = @resolution,
+      project = @project,
+      sprint = @sprint,
+      quarter = @quarter,
+      year = @year,
+      updated_at = @updated_at
+  `)
+
+  stmt.run({
+    id: doc.id,
+    origin_task_key: doc.originTaskKey || '',
+    target_task_key: doc.targetTaskKey || '',
+    slack_url: doc.slackUrl || '',
+    content: doc.content || '',
+    resolution: doc.resolution || '',
+    project: doc.project || 'GOP',
+    sprint: doc.sprint || '',
+    quarter: doc.quarter || '',
+    year: doc.year ? Number(doc.year) : null,
+    created_at: doc.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  })
+}
+
+export function updateImproveDocTargetCard(id, targetTaskKey) {
+  return db.prepare(`
+    UPDATE improve_docs
+    SET target_task_key = ?, updated_at = ?
+    WHERE id = ?
+  `).run(targetTaskKey || '', new Date().toISOString(), id)
+}
+
+export function deleteImproveDoc(id) {
+  return db.prepare('DELETE FROM improve_docs WHERE id = ?').run(id)
+}
+
+// Seed default improve docs from initial screenshot if empty
+try {
+  const countImprove = db.prepare('SELECT count(*) as c FROM improve_docs').get().c
+  if (countImprove === 0) {
+    const seedItems = [
+      {
+        id: 'imp_seed_1',
+        originTaskKey: 'GOP-3986',
+        targetTaskKey: 'GOP-4394',
+        slackUrl: '',
+        content: 'Lịch sử tạo/thu hồi yêu cầu Sửa cước hiển thị thừa tiền hủy, tiền hoàn dù không có hai field này khi tạo yêu cầu.',
+        resolution: 'Tách card riêng để xử lý.',
+        project: 'GOP',
+        sprint: 'GMS 08/09/2026 - 21/09/2026',
+        quarter: 'Q3',
+        year: 2026,
+      },
+      {
+        id: 'imp_seed_2',
+        originTaskKey: 'GOP-3986',
+        targetTaskKey: 'GOP-4395',
+        slackUrl: '',
+        content: 'Lịch sử yêu cầu giao nhận tận nơi bỏ trống loại yêu cầu (Hủy lấy/giao, Sửa thông tin lấy/giao), đồng thời thừa tiền hủy, tiền hoàn.',
+        resolution: 'Tách card riêng để xử lý.',
+        project: 'GOP',
+        sprint: 'GMS 08/09/2026 - 21/09/2026',
+        quarter: 'Q3',
+        year: 2026,
+      },
+      {
+        id: 'imp_seed_3',
+        originTaskKey: 'GOP-4018',
+        targetTaskKey: 'GOP-4363',
+        slackUrl: '',
+        content: 'Chuyển phơi thành công nhưng không chuyển Booking Sheet sang chuyến mới để kiểm tra và thao tác tiếp.',
+        resolution: 'Tạm bypass, fix sau.',
+        project: 'GOP',
+        sprint: 'GMS 08/09/2026 - 21/09/2026',
+        quarter: 'Q3',
+        year: 2026,
+      },
+      {
+        id: 'imp_seed_4',
+        originTaskKey: 'GOP-4018',
+        targetTaskKey: 'GOP-4365',
+        slackUrl: '',
+        content: 'Phơi nhúng trên BMS chưa cập nhật cấu hình hiển thị sau khi nhấn Làm mới; hiện phải clear cache.',
+        resolution: 'Improve cơ chế đồng bộ sau.',
+        project: 'GOP',
+        sprint: 'GMS 08/09/2026 - 21/09/2026',
+        quarter: 'Q3',
+        year: 2026,
+      },
+      {
+        id: 'imp_seed_5',
+        originTaskKey: 'GOP-4348',
+        targetTaskKey: '',
+        slackUrl: '',
+        content: 'Trạng thái cuộc gọi trong chi tiết đơn hàng chưa lấy màu nền như ngoài bảng hàng.',
+        resolution: 'UI enhance sau.',
+        project: 'GOP',
+        sprint: 'GMS 08/09/2026 - 21/09/2026',
+        quarter: 'Q3',
+        year: 2026,
+      },
+      {
+        id: 'imp_seed_6',
+        originTaskKey: 'GOP-4348',
+        targetTaskKey: '',
+        slackUrl: '',
+        content: 'Cần bổ sung cách hiển thị khi nội dung trạng thái cuộc gọi quá dài.',
+        resolution: 'UI enhance sau.',
+        project: 'GOP',
+        sprint: 'GMS 08/09/2026 - 21/09/2026',
+        quarter: 'Q3',
+        year: 2026,
+      },
+    ]
+    for (const item of seedItems) {
+      saveImproveDoc(item)
+    }
+  }
+} catch (e) {
+  console.error('Error seeding improve_docs:', e)
 }
 
 const insertItsTicket = db.prepare(`

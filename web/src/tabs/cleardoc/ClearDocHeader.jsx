@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import {
   FileText, Sparkles, Copy, Plus, FolderKanban, Calendar, Layers,
-  Search, X, RotateCcw, Check, Share2, FileSpreadsheet
+  Search, X, RotateCcw, Check, Share2, FileSpreadsheet, Lightbulb
 } from 'lucide-react'
 
 export function ClearDocHeader({
+  viewMode = 'docs',
   filteredDocsCount = 0,
+  filteredImproveDocsCount = 0,
   filterProject,
   setFilterProject,
   availableProjects = [],
@@ -22,21 +24,34 @@ export function ClearDocHeader({
   onResetFilters,
   onOpenAiModal,
   onOpenAddModal,
+  onOpenAddImproveModal,
   onCopyBscTsv,
   onCopyMarkdownReport,
+  onCopyImproveTsv,
+  onCopyImproveMarkdown,
 }) {
   const [copiedType, setCopiedType] = useState(null)
   const [showExportMenu, setShowExportMenu] = useState(false)
 
+  const isImproveMode = viewMode === 'improve'
+
   const handleCopyTsv = () => {
-    onCopyBscTsv()
+    if (isImproveMode) {
+      if (onCopyImproveTsv) onCopyImproveTsv()
+    } else {
+      if (onCopyBscTsv) onCopyBscTsv()
+    }
     setCopiedType('tsv')
     setTimeout(() => setCopiedType(null), 2200)
     setShowExportMenu(false)
   }
 
   const handleCopyMd = () => {
-    onCopyMarkdownReport()
+    if (isImproveMode) {
+      if (onCopyImproveMarkdown) onCopyImproveMarkdown()
+    } else {
+      if (onCopyMarkdownReport) onCopyMarkdownReport()
+    }
     setCopiedType('md')
     setTimeout(() => setCopiedType(null), 2200)
     setShowExportMenu(false)
@@ -54,45 +69,61 @@ export function ClearDocHeader({
       <div className="flex flex-wrap items-center justify-between gap-4">
         {/* Tiêu đề & Icon */}
         <div className="flex items-center gap-3">
-          <span className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
-            <FileText size={20} />
+          <span
+            className={`p-2.5 rounded-xl text-white shadow-sm transition-all ${
+              isImproveMode
+                ? 'bg-gradient-to-br from-purple-500 to-indigo-600'
+                : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+            }`}
+          >
+            {isImproveMode ? <Lightbulb size={20} /> : <FileText size={20} />}
           </span>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
-                Quản lý Clear Doc
+                {isImproveMode ? 'Quản lý Improve Doc' : 'Quản lý Clear Doc'}
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
-                {filteredDocsCount} thread
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  isImproveMode
+                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
+                    : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+                }`}
+              >
+                {isImproveMode ? `${filteredImproveDocsCount} vấn đề` : `${filteredDocsCount} thread`}
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Theo dõi làm rõ tài liệu & yêu cầu giữa QC và BA/Team, phục vụ chấm điểm BSC
+              {isImproveMode
+                ? 'Theo dõi các vấn đề phát sinh ngoài scope & cải tiến từ thảo luận Slack/Test'
+                : 'Theo dõi làm rõ tài liệu & yêu cầu giữa QC và BA/Team, phục vụ chấm điểm BSC'}
             </p>
           </div>
         </div>
 
         {/* Các nút hành động chính */}
         <div className="flex items-center gap-2">
-          {/* NÚT AI TỰ ĐỘNG ĐIỀN */}
-          <button
-            onClick={onOpenAiModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white shadow-xs hover:shadow transition-all group"
-            title="Dán văn bản thô để AI trích xuất task Jira, link thread và đánh số câu hỏi tự động"
-          >
-            <Sparkles size={14} className="group-hover:rotate-12 transition-transform" />
-            <span>✨ AI Tự động điền</span>
-          </button>
+          {/* NÚT AI TỰ ĐỘNG ĐIỀN (cho Clear Doc) */}
+          {!isImproveMode && (
+            <button
+              onClick={onOpenAiModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white shadow-xs hover:shadow transition-all group"
+              title="Dán văn bản thô để AI trích xuất task Jira, link thread và đánh số câu hỏi tự động"
+            >
+              <Sparkles size={14} className="group-hover:rotate-12 transition-transform" />
+              <span>✨ AI Tự động điền</span>
+            </button>
+          )}
 
-          {/* NÚT XUẤT / SAO CHÉP BẢNG BSC (DROPDOWN) */}
+          {/* NÚT XUẤT / SAO CHÉP BẢNG */}
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 dark:border-neutral-700 text-gray-700 dark:text-gray-200 bg-white dark:bg-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-700 shadow-xs transition-all"
-              title="Xuất bảng Clear Doc sang Excel hoặc Markdown"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg border border-gray-200 dark:border-neutral-700 text-gray-700 dark:text-gray-200 bg-white dark:bg-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-700 shadow-xs transition-all"
+              title={isImproveMode ? 'Xuất bảng Improve Doc sang Excel hoặc Markdown' : 'Xuất bảng Clear Doc sang Excel hoặc Markdown'}
             >
               {copiedType ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-              <span>{copiedType ? 'Đã sao chép!' : 'Xuất dữ liệu BSC'}</span>
+              <span>{copiedType ? 'Đã sao chép!' : isImproveMode ? 'Xuất dữ liệu Improve' : 'Xuất dữ liệu BSC'}</span>
             </button>
 
             {showExportMenu && (
@@ -108,7 +139,7 @@ export function ClearDocHeader({
                   <FileSpreadsheet size={14} className="text-emerald-600" />
                   <div>
                     <div className="font-semibold">Sao chép bảng TSV</div>
-                    <div className="text-[10px] text-gray-400">Chuẩn dán trực tiếp vào Excel / BSC</div>
+                    <div className="text-[10px] text-gray-400">Chuẩn dán trực tiếp vào Excel / Sheet</div>
                   </div>
                 </button>
                 <button
@@ -126,14 +157,24 @@ export function ClearDocHeader({
             )}
           </div>
 
-          {/* NÚT THÊM THỦ CÔNG */}
-          <button
-            onClick={onOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all"
-          >
-            <Plus size={15} />
-            <span>Thêm Clear Doc</span>
-          </button>
+          {/* NÚT THÊM MỤC */}
+          {isImproveMode ? (
+            <button
+              onClick={onOpenAddImproveModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-all"
+            >
+              <Plus size={15} />
+              <span>Thêm Improve</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenAddModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all"
+            >
+              <Plus size={15} />
+              <span>Thêm Clear Doc</span>
+            </button>
+          )}
         </div>
       </div>
 
