@@ -15,16 +15,17 @@ import Release from './tabs/Release.jsx'
 import { api, query } from './lib/api.js'
 import { useDarkMode } from './lib/useDarkMode.js'
 import { refreshTempoData } from './components/TempoReminder.jsx'
+import ScrollToTop from './components/ScrollToTop.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+  { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
+  { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
   { id: 'bsc', label: 'Thống kê BSC', icon: Award },
   { id: 'time', label: 'Quản lý Time', icon: Clock },
   { id: 'clear-doc', label: 'Clear & Improve doc', icon: FileText },
   { id: 'release', label: 'Release', icon: Rocket },
   { id: 'its', label: 'Quản lý ITS', icon: Headphones },
-  { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
-  { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
   { id: 'bug-backlog', label: 'Bug backlog', icon: Layers3 },
 ]
 
@@ -181,6 +182,7 @@ export default function App() {
           <BugBacklog bugs={bugBacklog} highlightKey={highlightKey} />
         )}
       </main>
+      <ScrollToTop />
     </div>
   )
 }
