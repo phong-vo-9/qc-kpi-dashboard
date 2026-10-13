@@ -100,6 +100,15 @@ CREATE TABLE IF NOT EXISTS non_its_feedbacks (
   created_at TEXT,
   updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS release_history (
+  id TEXT PRIMARY KEY,
+  team_name TEXT,
+  task_keys TEXT,
+  mention_tag TEXT,
+  notification_msg TEXT,
+  scope_msg TEXT,
+  created_at TEXT
+);
 `)
 
 try { db.exec('ALTER TABLE tasks ADD COLUMN sprint TEXT;'); } catch (e) {}
@@ -762,5 +771,50 @@ try {
   console.error('Lỗi khởi tạo mẫu non-ITS feedback:', e.message)
 }
 
+// Release History helpers
+const insertReleaseHistory = db.prepare(`
+  INSERT INTO release_history (id, team_name, task_keys, mention_tag, notification_msg, scope_msg, created_at)
+  VALUES (@id, @team_name, @task_keys, @mention_tag, @notification_msg, @scope_msg, @created_at)
+  ON CONFLICT(id) DO UPDATE SET
+    team_name = excluded.team_name,
+    task_keys = excluded.task_keys,
+    mention_tag = excluded.mention_tag,
+    notification_msg = excluded.notification_msg,
+    scope_msg = excluded.scope_msg
+`)
+
+export function saveReleaseHistory(entry) {
+  const id = entry.id || 'rel_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
+  const createdAt = entry.createdAt || new Date().toISOString()
+  insertReleaseHistory.run({
+    id,
+    team_name: entry.teamName || 'Team GMS',
+    task_keys: Array.isArray(entry.taskKeys) ? entry.taskKeys.join(',') : (entry.taskKeys || ''),
+    mention_tag: entry.mentionTag || '@channel',
+    notification_msg: entry.notificationMsg || '',
+    scope_msg: entry.scopeMsg || '',
+    created_at: createdAt,
+  })
+  return { id, ...entry, createdAt }
+}
+
+export function getReleaseHistory(limit = 30) {
+  const rows = db.prepare('SELECT * FROM release_history ORDER BY created_at DESC LIMIT ?').all(limit)
+  return rows.map((r) => ({
+    id: r.id,
+    teamName: r.team_name,
+    taskKeys: r.task_keys ? r.task_keys.split(',') : [],
+    mentionTag: r.mention_tag,
+    notificationMsg: r.notification_msg,
+    scopeMsg: r.scope_msg,
+    createdAt: r.created_at,
+  }))
+}
+
+export function deleteReleaseHistory(id) {
+  return db.prepare('DELETE FROM release_history WHERE id = ?').run(id)
+}
+
 export default db
+
 

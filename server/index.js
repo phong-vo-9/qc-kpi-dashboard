@@ -1,8 +1,9 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
 import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets, fetchTempoWorklogs, fetchTempoAllocations } from './jira.js'
-import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getImproveDocs, saveImproveDoc, updateImproveDocTargetCard, deleteImproveDoc, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback } from './db.js'
+import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getImproveDocs, saveImproveDoc, updateImproveDocTargetCard, deleteImproveDoc, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback, saveReleaseHistory, getReleaseHistory, deleteReleaseHistory } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
+import { fetchJiraIssuesForRelease, generateReleaseWithAI, parseTaskKeys, getAiConfig, saveAiConfig } from './release.js'
 
 const app = express()
 app.use(express.json())
@@ -1482,6 +1483,121 @@ app.get('/api/sprint-analysis', async (_req, res) => {
     }
 
     res.json(results)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Release Management APIs ───────────────────────────────────────────────────
+
+// Fetch thông tin Jira cho danh sách task phục vụ release
+app.post('/api/release/fetch', async (req, res) => {
+  try {
+    const { taskKeys, rawInput } = req.body || {}
+    let keys = Array.isArray(taskKeys) ? taskKeys : []
+    if (rawInput && typeof rawInput === 'string') {
+      keys = [...keys, ...parseTaskKeys(rawInput)]
+    }
+    keys = Array.from(new Set(keys.filter(Boolean)))
+
+    if (keys.length === 0) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp ít nhất 1 mã task Jira hợp lệ (VD: GOP-4351)' })
+    }
+
+    const { issues, errors } = await fetchJiraIssuesForRelease(keys)
+    res.json({ issues, errors })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Gọi AI tạo thông báo release và tóm tắt In Scope / Out of Scope
+app.post('/api/release/generate', async (req, res) => {
+  try {
+    const { issues, taskKeys, rawInput, headerTitle, teamName, mentionTag, customInstructions } = req.body || {}
+
+    let targetIssues = Array.isArray(issues) ? issues : []
+    if (targetIssues.length === 0) {
+      let keys = Array.isArray(taskKeys) ? taskKeys : []
+      if (rawInput && typeof rawInput === 'string') {
+        keys = [...keys, ...parseTaskKeys(rawInput)]
+      }
+      keys = Array.from(new Set(keys.filter(Boolean)))
+
+      if (keys.length === 0) {
+        return res.status(400).json({ error: 'Thiếu danh sách mã task để tạo release' })
+      }
+
+      const fetched = await fetchJiraIssuesForRelease(keys)
+      targetIssues = fetched.issues
+    }
+
+    if (targetIssues.length === 0) {
+      return res.status(400).json({ error: 'Không lấy được thông tin của task nào từ Jira' })
+    }
+
+    const result = await generateReleaseWithAI({
+      issues: targetIssues,
+      headerTitle: headerTitle !== undefined ? headerTitle : 'GMS RELEASED PROD',
+      teamName: teamName || 'Team GMS',
+      mentionTag: mentionTag !== undefined ? mentionTag : '@channel',
+      customInstructions: customInstructions || '',
+    })
+
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Lấy cấu hình AI
+app.get('/api/release/config', (req, res) => {
+  try {
+    const cfg = getAiConfig()
+    res.json({
+      ...cfg,
+      apiKey: cfg.apiKey ? '••••••••' + cfg.apiKey.slice(-4) : '',
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Lưu cấu hình AI
+app.post('/api/release/config', (req, res) => {
+  try {
+    const saved = saveAiConfig(req.body || {})
+    res.json(saved)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Lấy lịch sử Release
+app.get('/api/release/history', (req, res) => {
+  try {
+    const history = getReleaseHistory()
+    res.json(history)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Lưu lịch sử Release
+app.post('/api/release/history', (req, res) => {
+  try {
+    const saved = saveReleaseHistory(req.body || {})
+    res.json(saved)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Xóa lịch sử Release
+app.delete('/api/release/history/:id', (req, res) => {
+  try {
+    deleteReleaseHistory(req.params.id)
+    res.json({ success: true })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
