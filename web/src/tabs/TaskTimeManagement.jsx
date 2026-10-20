@@ -18,6 +18,7 @@ import {
 import { Badge, EmptyState } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
 import { jiraUrl } from '../lib/api.js'
+import { sortSprints } from '../lib/sprints.js'
 
 const PAGE_SIZES = [10, 20, 50, 100]
 
@@ -50,7 +51,7 @@ export default function TaskTimeManagement({ tasks = [], highlightKey }) {
     for (const t of taskIssues) {
       if (t.sprint) set.add(t.sprint)
     }
-    return Array.from(set).sort((a, b) => b.localeCompare(a))
+    return sortSprints(Array.from(set))
   }, [taskIssues])
 
   // Aggregate metrics

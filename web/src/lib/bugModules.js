@@ -1084,3 +1084,12 @@ export function bugStatusOrder(status) {
   const index = BUG_STATUS_BUCKETS.indexOf(status)
   return index === -1 ? BUG_STATUS_BUCKETS.length : index
 }
+
+export function isQcPushBug(bug) {
+  if (!bug) return false
+  const labels = Array.isArray(bug.labels)
+    ? bug.labels
+    : (typeof bug.labels === 'string' ? JSON.parse(bug.labels || '[]') : [])
+  return labels.some((l) => /^qc[\s_-]?push$/i.test(String(l).trim()))
+}
+

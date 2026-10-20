@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Bug, Filter, Layers3, Clock3, PlayCircle, ClipboardCheck, CheckCircle2, ExternalLink, RotateCcw, GripVertical, Plus, Save, Check, Copy, Sparkles, Target, AlertCircle, X } from 'lucide-react'
+import { Search, Bug, Filter, Layers3, Clock3, PlayCircle, ClipboardCheck, CheckCircle2, ExternalLink, RotateCcw, GripVertical, Plus, Save, Check, Copy, Sparkles, Target, AlertCircle, X, Flame } from 'lucide-react'
 import { Badge, EmptyState, Panel } from '../components/ui.jsx'
 import { jiraUrl } from '../lib/api.js'
 import { statusStyle } from '../lib/tokens.js'
@@ -9,6 +9,7 @@ import {
   canonicalBugStatus,
   bugStatusOrder,
   normalizeBugLabel,
+  isQcPushBug,
 } from '../lib/bugModules.js'
 
 const PAGE_SIZES = [10, 20, 50, 100]
@@ -92,8 +93,16 @@ function PlanBugCard({ bug, onRemove, onDragStart, onDragEnd, onOpen }) {
     >
       <GripVertical size={16} className="mt-0.5 shrink-0 text-gray-300 group-hover:text-blue-400" />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <button type="button" onClick={() => onOpen(bug)} className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">{bug.key}</button>
+          {isQcPushBug(bug) && (
+            <span
+              title="QC Push"
+              className="inline-flex items-center justify-center w-4 h-4 rounded bg-amber-50 dark:bg-amber-500/15 text-amber-500 border border-amber-200/80 dark:border-amber-500/30 shrink-0"
+            >
+              <Flame size={10} className="text-amber-500 fill-amber-500" />
+            </span>
+          )}
           <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${priorityTone}`}>{priority}</span>
         </div>
         <p className="text-sm font-medium leading-5 text-gray-800 dark:text-gray-100 line-clamp-2" title={bug.summary}>{bug.summary || 'Không có summary'}</p>
@@ -225,7 +234,7 @@ function PlanningBoard({ backlog, filtered }) {
         <div onDragOver={(e) => { e.preventDefault(); setDragOver('available') }} onDrop={(e) => { e.preventDefault(); const source = e.dataTransfer.getData('text/plain') || dragKey; if (source && plannedKeys.includes(source)) removeBug(source); setDragOver(null) }} className={`rounded-xl border bg-white/70 p-3 dark:bg-neutral-900/60 ${dragOver === 'available' ? 'border-blue-400 ring-2 ring-blue-500/20' : 'border-gray-200/80 dark:border-neutral-800'}`}>
           <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Backlog khả dụng</h3><p className="text-xs text-gray-500 dark:text-gray-400">{availableBugs.length} bug đang hiển thị</p></div><span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 dark:bg-neutral-800 dark:text-gray-300">{filtered.length}</span></div>
           <div className="max-h-[390px] space-y-2 overflow-y-auto pr-1">
-            {availableBugs.slice(0, 60).map((bug) => <div key={bug.key} draggable onDragStart={(e) => { e.dataTransfer.setData('text/plain', bug.key); setDragKey(bug.key) }} onDragEnd={() => setDragKey(null)} className="group flex cursor-grab items-center gap-2 rounded-lg border border-gray-100 bg-white p-2.5 hover:border-blue-200 hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-900"><GripVertical size={15} className="shrink-0 text-gray-300 group-hover:text-blue-400" /><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><button type="button" onClick={() => openBug(bug)} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">{bug.key}</button><span className="truncate text-[11px] text-gray-400">{bug.primaryModule?.name}</span></div><p className="truncate text-xs text-gray-700 dark:text-gray-300" title={bug.summary}>{bug.summary}</p></div><span className="shrink-0 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{storyPointsOf(bug)} SP</span><button type="button" onClick={() => addBug(bug.key)} className="rounded-md p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10"><Plus size={15} /></button></div>)}
+            {availableBugs.slice(0, 60).map((bug) => <div key={bug.key} draggable onDragStart={(e) => { e.dataTransfer.setData('text/plain', bug.key); setDragKey(bug.key) }} onDragEnd={() => setDragKey(null)} className="group flex cursor-grab items-center gap-2 rounded-lg border border-gray-100 bg-white p-2.5 hover:border-blue-200 hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-900"><GripVertical size={15} className="shrink-0 text-gray-300 group-hover:text-blue-400" /><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><button type="button" onClick={() => openBug(bug)} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">{bug.key}</button>{isQcPushBug(bug) && <Flame size={12} className="text-amber-500 fill-amber-500 shrink-0" title="QC Push" />}<span className="truncate text-[11px] text-gray-400">{bug.primaryModule?.name}</span></div><p className="truncate text-xs text-gray-700 dark:text-gray-300" title={bug.summary}>{bug.summary}</p></div><span className="shrink-0 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{storyPointsOf(bug)} SP</span><button type="button" onClick={() => addBug(bug.key)} className="rounded-md p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10"><Plus size={15} /></button></div>)}
             {availableBugs.length === 0 && <div className="flex min-h-28 items-center justify-center rounded-lg border border-dashed border-gray-200 text-center text-xs text-gray-400 dark:border-neutral-700">Không còn bug phù hợp bộ lọc</div>}
             {availableBugs.length > 60 && <p className="pt-2 text-center text-[11px] text-gray-400">Hiển thị 60 bug đầu tiên — dùng bộ lọc để thu hẹp.</p>}
           </div>
@@ -246,6 +255,7 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
   const [search, setSearch] = useState('')
   const [moduleFilter, setModuleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [qcPushOnly, setQcPushOnly] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [sortField, setSortField] = useState('updated')
@@ -297,6 +307,7 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return backlog.filter((bug) => {
+      if (qcPushOnly && !isQcPushBug(bug)) return false
       if (moduleFilter !== 'all' && bug.primaryModule.label !== moduleFilter) return false
       if (statusFilter !== 'all' && bug.bugStatus !== statusFilter) return false
       if (!q) return true
@@ -310,7 +321,7 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
         (bug.reporter || '').toLowerCase().includes(q)
       )
     })
-  }, [backlog, moduleFilter, search, statusFilter])
+  }, [backlog, moduleFilter, qcPushOnly, search, statusFilter])
 
   const sorted = useMemo(() => {
     const list = [...filtered]
@@ -329,16 +340,17 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
     })
   }, [filtered, sortDirection, sortField])
 
-  useEffect(() => setPage(1), [search, moduleFilter, statusFilter, pageSize, sortField, sortDirection])
+  useEffect(() => setPage(1), [search, moduleFilter, statusFilter, qcPushOnly, pageSize, sortField, sortDirection])
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
   const start = (page - 1) * pageSize
   const rows = sorted.slice(start, start + pageSize)
 
   const total = backlog.length
+  const qcPushCount = useMemo(() => backlog.filter(isQcPushBug).length, [backlog])
   const filterModules = moduleStats.filter((m) => m.label !== UNCLASSIFIED.label)
-  const hasActiveFilters = Boolean(search || moduleFilter !== 'all' || statusFilter !== 'all')
-  const activeFilterCount = Number(Boolean(search)) + Number(moduleFilter !== 'all') + Number(statusFilter !== 'all')
+  const hasActiveFilters = Boolean(search || moduleFilter !== 'all' || statusFilter !== 'all' || qcPushOnly)
+  const activeFilterCount = Number(Boolean(search)) + Number(moduleFilter !== 'all') + Number(statusFilter !== 'all') + Number(qcPushOnly)
 
   const isOverdue = (bug) => {
     if (!bug.enddate || !bug.duedate) return false
@@ -360,6 +372,7 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
     setSearch('')
     setModuleFilter('all')
     setStatusFilter('all')
+    setQcPushOnly(false)
   }
 
   return (
@@ -370,7 +383,7 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
         className="overflow-hidden border-gray-200/80 dark:border-neutral-800/90"
       >
         <div className="space-y-5">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label className="block">
               <span className="flex h-5 items-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tìm kiếm</span>
               <span className="relative mt-1.5 block">
@@ -413,6 +426,24 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
                 </select>
               </span>
             </label>
+
+            <div className="block">
+              <span className="flex h-5 items-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">QC Push</span>
+              <div className="mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQcPushOnly((active) => !active)}
+                  title="Lọc các bug có label QC Push"
+                  className={`h-11 w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition focus:outline-none shadow-xs ${qcPushOnly
+                    ? 'border-amber-500 bg-amber-500 text-white shadow-sm ring-2 ring-amber-500/30'
+                    : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20'
+                    }`}
+                >
+                  <Flame size={15} className={qcPushOnly ? 'text-white fill-white' : 'text-amber-500 fill-amber-500'} />
+                  <span>QC Push ({qcPushCount})</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {hasActiveFilters && (
@@ -421,6 +452,7 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
               {search && <Badge className="max-w-full bg-white text-blue-700 shadow-sm dark:bg-neutral-900 dark:text-blue-300"><span className="truncate">Tìm kiếm: {search}</span></Badge>}
               {moduleFilter !== 'all' && <Badge className="bg-white text-blue-700 shadow-sm dark:bg-neutral-900 dark:text-blue-300">Module: {moduleFilter}</Badge>}
               {statusFilter !== 'all' && <Badge className="bg-white text-blue-700 shadow-sm dark:bg-neutral-900 dark:text-blue-300">Trạng thái: {statusFilter}</Badge>}
+              {qcPushOnly && <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200 shadow-sm"><Flame size={12} className="inline mr-1 text-amber-500 fill-amber-500" /> QC Push</Badge>}
               <button type="button" onClick={clearFilters} className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-gray-500 transition hover:bg-white hover:text-blue-600 dark:text-gray-400 dark:hover:bg-neutral-900 dark:hover:text-blue-300">
                 <RotateCcw size={13} /> Xoá bộ lọc
               </button>
@@ -466,12 +498,23 @@ export default function BugBacklog({ bugs = [], highlightKey }) {
                       <tr
                         key={bug.key}
                         id={`task-${bug.key}`}
-                        className={`border-b border-gray-50 dark:border-neutral-800/60 hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-all ${highlighted ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-neutral-900 bg-blue-500/10' : ''}`}
+                        className={`border-b border-gray-50 dark:border-neutral-800/60 transition-all ${
+                          isQcPushBug(bug)
+                            ? 'bg-amber-50/40 dark:bg-amber-500/[0.03] hover:bg-amber-100/30 dark:hover:bg-amber-500/[0.06]'
+                            : 'hover:bg-blue-50/50 dark:hover:bg-blue-500/5'
+                        } ${highlighted ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-neutral-900 bg-blue-500/10' : ''}`}
                       >
-                        <td className="py-2 px-3">
-                          <a href={jiraUrl(bug.key)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">
-                            {bug.key} <ExternalLink size={12} />
-                          </a>
+                        <td className={`py-2 px-3 ${
+                          isQcPushBug(bug) ? 'border-l-[3.5px] border-l-amber-500 dark:border-l-amber-400 pl-2.5' : ''
+                        }`}>
+                          <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                            {isQcPushBug(bug) && (
+                              <Flame size={15} className="text-amber-500 fill-amber-500 shrink-0" title="QC Push" />
+                            )}
+                            <a href={jiraUrl(bug.key)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">
+                              {bug.key} <ExternalLink size={12} />
+                            </a>
+                          </div>
                         </td>
                         <td className="py-2 px-3 w-[320px] max-w-[320px] truncate text-gray-700 dark:text-gray-200" title={bug.summary}>{bug.summary}</td>
                         <td className="py-2 px-3 min-w-[190px]">

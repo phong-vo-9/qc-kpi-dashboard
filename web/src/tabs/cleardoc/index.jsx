@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { api } from '../../lib/api.js'
+import { sortSprints } from '../../lib/sprints.js'
 import {
   isRegressionTask,
   formatBscTsv,
@@ -172,7 +173,7 @@ export default function ClearDoc({ tasks = [], mode = 'dark', onNavigateToTask }
       pool = pool.filter((t) => t.quarter === q && String(t.year) === y)
     }
     const sprints = [...new Set(pool.map((t) => t.sprint).filter(Boolean))]
-    return sprints.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    return sortSprints(sprints)
   }, [eligibleTasks, filterProject, filterQuarter])
 
   // Map nhanh task key -> task object

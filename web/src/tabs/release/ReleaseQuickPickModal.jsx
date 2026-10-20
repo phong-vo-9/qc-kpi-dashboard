@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Search, Check, Layers, Filter, Zap, Calendar } from 'lucide-react'
+import { compareSprints } from '../../lib/sprints.js'
 
 export function ReleaseQuickPickModal({
   isOpen,
@@ -23,7 +24,7 @@ export function ReleaseQuickPickModal({
     return list.sort((a, b) => {
       if (a === activeSprintName) return -1
       if (b === activeSprintName) return 1
-      return b.localeCompare(a)
+      return compareSprints(a, b)
     })
   }, [tasks, activeSprintName])
 

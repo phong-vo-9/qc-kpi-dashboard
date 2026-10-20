@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, RotateCcw, Rocket, SlidersHorizontal } from 'lucide-react'
 import { statusStyle } from '../lib/tokens.js'
+import { sortSprints } from '../lib/sprints.js'
 
 const EMPTY = { project: '', sprint: '', year: '', quarter: '', status: '', review: '', tc: '', td: '', type: '', label: '', excludeLabel: '' }
 
@@ -123,7 +124,7 @@ export default function Filters({ options, applied, onApply, onProjectChange, sp
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-11 gap-3">
         <MultiSelect label="Project" value={draft.project} onChange={set('project')} options={options.projects || []} panelClassName="min-w-44" />
-        <MultiSelect label="Sprint" value={draft.sprint} onChange={set('sprint')} options={options.sprints || []} panelClassName="min-w-56" />
+        <MultiSelect label="Sprint" value={draft.sprint} onChange={set('sprint')} options={sortSprints(options.sprints || [])} panelClassName="min-w-56" />
         <MultiSelect label="Year" value={draft.year} onChange={set('year')} options={options.years || []} panelClassName="min-w-36" />
         <MultiSelect label="Quarter" value={draft.quarter} onChange={set('quarter')} options={options.quarters || []} panelClassName="min-w-36" />
         <MultiSelect label="Status" value={draft.status} onChange={set('status')} options={options.statuses || []} optionClassName={statusStyle} panelClassName="min-w-56" />

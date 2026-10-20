@@ -1,8 +1,22 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, ExternalLink, Inbox, AlertTriangle, Bug, CalendarOff, ChevronDown } from 'lucide-react'
+import { Search, ExternalLink, Inbox, AlertTriangle, Bug, CalendarOff, ChevronDown, Flame, RotateCcw } from 'lucide-react'
 import { Badge, EmptyState, Panel, Stat } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
 import { jiraUrl } from '../lib/api.js'
+import { isQcPushBug } from '../lib/bugModules.js'
+import { compareSprints } from '../lib/sprints.js'
+
+export function QcPushBadge({ className = '', showText = false }) {
+  return (
+    <span
+      title="QC Push (Bug có label QC Push)"
+      className={`inline-flex items-center justify-center w-5 h-5 rounded-md bg-amber-50 dark:bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/30 shrink-0 shadow-2xs ${className}`}
+    >
+      <Flame size={12} className="text-amber-500 fill-amber-500 dark:text-amber-400 dark:fill-amber-400" />
+      {showText && <span className="ml-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">QC Push</span>}
+    </span>
+  )
+}
 
 const formatDateDMY = (dateStr) => {
   if (!dateStr) return '—'
@@ -54,7 +68,7 @@ export function GmsSprintStatsPanel({ bugs }) {
     }
     return [...grouped.values()]
       .map((item) => ({ ...item, open: item.total - item.fixed, rate: item.total ? Math.round((item.fixed / item.total) * 100) : 0 }))
-      .sort((a, b) => a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+      .sort((a, b) => compareSprints(a.sprint, b.sprint))
   }, [bugs])
 
   const totals = useMemo(() => sprintStats.reduce(
@@ -163,7 +177,11 @@ function LateReportCard({ title, icon: Icon, count, tasks, onNavigate, colorClas
               {tasks.map((t) => (
                 <li key={t.key} className="pt-1.5 first:pt-0 flex items-center justify-between gap-2">
                   <span className="text-gray-600 dark:text-gray-400 truncate max-w-[200px] sm:max-w-md" title={t.summary}>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">{t.key}</span>: {t.summary}
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{t.key}</span>
+                    {isQcPushBug(t) && (
+                      <Flame size={12} className="inline ml-1 text-amber-500 fill-amber-500 align-text-bottom" title="QC Push" />
+                    )}
+                    : {t.summary}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
@@ -211,6 +229,7 @@ const isReporterCurrentUser = (reporter, currentUser) => {
 export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUser = '' }) {
   const [search, setSearch] = useState('')
   const [showMyBugs, setShowMyBugs] = useState(false)
+  const [showQcPush, setShowQcPush] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [sortField, setSortField] = useState('key')
@@ -225,6 +244,10 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUse
     return bugs.filter((bug) => isReporterCurrentUser(bug.reporter, currentUser)).length
   }, [bugs, currentUser])
 
+  const qcPushBugCount = useMemo(() => {
+    return bugs.filter(isQcPushBug).length
+  }, [bugs])
+
   const dueDateWarnings = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0]
     const isDone = (x) => x.status === 'Done' || x.status === 'Released'
@@ -238,12 +261,16 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUse
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const source = showMyBugs
-      ? bugs.filter((bug) => isReporterCurrentUser(bug.reporter, currentUser))
-      : bugs
+    let source = bugs
+    if (showMyBugs) {
+      source = source.filter((bug) => isReporterCurrentUser(bug.reporter, currentUser))
+    }
+    if (showQcPush) {
+      source = source.filter(isQcPushBug)
+    }
     if (!q) return source
     return source.filter((t) => t.key.toLowerCase().includes(q) || (t.summary || '').toLowerCase().includes(q))
-  }, [bugs, currentUser, search, showMyBugs])
+  }, [bugs, currentUser, search, showMyBugs, showQcPush])
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -266,6 +293,9 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUse
       } else if (sortField === 'qcWeight') {
         valA = a.qcWeight || 0
         valB = b.qcWeight || 0
+      } else if (sortField === 'qcPush') {
+        valA = isQcPushBug(a) ? 1 : 0
+        valB = isQcPushBug(b) ? 1 : 0
       }
 
       if (valA === valB) return 0
@@ -282,7 +312,7 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUse
     })
   }, [filtered, sortField, sortDirection])
 
-  useEffect(() => setPage(1), [search, pageSize, bugs, sortField, showMyBugs, currentUser])
+  useEffect(() => setPage(1), [search, pageSize, bugs, sortField, showMyBugs, showQcPush, currentUser])
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
   const start = (page - 1) * pageSize
@@ -378,23 +408,40 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUse
           <span className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400">
             <Bug size={24} />
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-xs text-gray-500 dark:text-gray-400">Tổng số Bug (Type)</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">{stats.total}</div>
-            <button
-              type="button"
-              onClick={() => setShowMyBugs(true)}
-              disabled={!currentUser}
-              aria-pressed={showMyBugs}
-              title="Lọc danh sách theo các bug do tôi report"
-              className={`mt-2 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showMyBugs
-                ? 'border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/20 dark:text-blue-200'
-                : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300'
-                }`}
-            >
-              <span>Bug tôi report</span>
-              <span className="rounded-full bg-white/80 px-1.5 py-0.5 tabular-nums dark:bg-neutral-900/70">{myBugCount}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowMyBugs((active) => !active)}
+                disabled={!currentUser}
+                aria-pressed={showMyBugs}
+                title="Lọc danh sách theo các bug do tôi report"
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showMyBugs
+                  ? 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/20 dark:text-blue-200 shadow-xs'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300'
+                  }`}
+              >
+                <span>Tôi report</span>
+                <span className="rounded-full bg-white/80 px-1.5 py-0.2 tabular-nums dark:bg-neutral-900/70">{myBugCount}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowQcPush((active) => !active)}
+                aria-pressed={showQcPush}
+                title="Lọc danh sách theo bug QC Push"
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${showQcPush
+                  ? 'border-amber-400 bg-amber-100 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-200 shadow-xs ring-1 ring-amber-400/40'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-300 dark:hover:border-amber-500/40 dark:hover:bg-amber-500/10 dark:hover:text-amber-300'
+                  }`}
+              >
+                <Flame size={12} className={showQcPush ? 'text-amber-600 fill-amber-600 dark:text-amber-300' : 'text-amber-500 fill-amber-500'} />
+                <span>QC Push</span>
+                <span className="rounded-full bg-white/80 px-1.5 py-0.2 tabular-nums dark:bg-neutral-900/70">{qcPushBugCount}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -451,18 +498,91 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUse
               aria-pressed={showMyBugs}
               title={currentUser ? `Lọc các bug do ${currentUser} report` : 'Chưa cấu hình tên người dùng Jira'}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showMyBugs
-                ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+                ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 shadow-xs'
                 : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20'
                 }`}
             >
               <Bug size={15} />
               Bug tôi report ({myBugCount})
             </button>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
+
+            <button
+              type="button"
+              onClick={() => setShowQcPush((active) => !active)}
+              aria-pressed={showQcPush}
+              title="Lọc các bug có label QC Push"
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all shadow-xs ${showQcPush
+                ? 'border-amber-500 bg-amber-500 text-white hover:bg-amber-600 shadow-sm ring-2 ring-amber-500/30'
+                : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20'
+                }`}
+            >
+              <Flame size={15} className={showQcPush ? 'text-white fill-white' : 'text-amber-500 fill-amber-500'} />
+              <span>QC Push ({qcPushBugCount})</span>
+            </button>
+
+            {(showMyBugs || showQcPush || search) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMyBugs(false)
+                  setShowQcPush(false)
+                  setSearch('')
+                }}
+                title="Xóa tất cả bộ lọc tìm kiếm và nhanh"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-neutral-700 px-2.5 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-neutral-800 dark:hover:text-gray-200 transition-colors"
+              >
+                <RotateCcw size={13} />
+                Bỏ lọc
+              </button>
+            )}
+
+            <div className="text-sm text-gray-500 dark:text-gray-400 tabular-nums">
               {sorted.length} bug{sorted.length !== 1 ? 's' : ''}
             </div>
           </div>
         </div>
+
+        {(showMyBugs || showQcPush) && (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-amber-50/40 dark:bg-amber-500/5 border-b border-amber-100/60 dark:border-amber-500/10 text-xs text-gray-600 dark:text-gray-300">
+            <span className="font-medium text-gray-500 dark:text-gray-400">Đang lọc theo:</span>
+            {showQcPush && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200 font-medium">
+                <Flame size={12} className="text-amber-600 fill-amber-600 dark:text-amber-400" /> Label QC Push
+                <button
+                  type="button"
+                  onClick={() => setShowQcPush(false)}
+                  className="hover:text-amber-950 dark:hover:text-white ml-0.5 font-bold"
+                  title="Bỏ lọc QC Push"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            {showMyBugs && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200 font-medium">
+                <Bug size={12} /> Bug tôi report
+                <button
+                  type="button"
+                  onClick={() => setShowMyBugs(false)}
+                  className="hover:text-blue-950 dark:hover:text-white ml-0.5 font-bold"
+                  title="Bỏ lọc Bug tôi report"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setShowQcPush(false)
+                setShowMyBugs(false)
+              }}
+              className="ml-auto text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Hiển thị tất cả
+            </button>
+          </div>
+        )}
 
         {sorted.length === 0 ? (
           <EmptyState icon={Inbox} hint="Không tìm thấy bug nào." />
@@ -488,18 +608,31 @@ export default function Bugs({ tasks, highlightKey, onNavigateToTask, currentUse
                 <tbody>
                   {rows.map((t) => {
                     const isHighlighted = t.key === highlightKey
+                    const isQcPush = isQcPushBug(t)
                     return (
                       <tr
                         key={t.key}
                         id={`task-${t.key}`}
-                        className={`border-b border-gray-50 dark:border-neutral-800/60 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-all ${isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-neutral-900 bg-blue-500/10' : ''
-                          }`}
+                        className={`border-b border-gray-50 dark:border-neutral-800/60 transition-all ${
+                          isQcPush
+                            ? 'bg-amber-50/40 dark:bg-amber-500/[0.03] hover:bg-amber-100/30 dark:hover:bg-amber-500/[0.06]'
+                            : 'hover:bg-gray-50 dark:hover:bg-neutral-800/50'
+                        } ${
+                          isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-neutral-900 bg-blue-500/10' : ''
+                        }`}
                       >
-                        <td className="py-2 px-3">
-                          <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer"
-                            className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">
-                            {t.key} <ExternalLink size={12} />
-                          </a>
+                        <td className={`py-2 px-3 ${
+                          isQcPush ? 'border-l-[3.5px] border-l-amber-500 dark:border-l-amber-400 pl-2.5' : ''
+                        }`}>
+                          <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                            {isQcPush && (
+                              <Flame size={15} className="text-amber-500 fill-amber-500 shrink-0" title="QC Push" />
+                            )}
+                            <a href={jiraUrl(t.key)} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">
+                              {t.key} <ExternalLink size={12} />
+                            </a>
+                          </div>
                         </td>
                         <td className="py-2 px-3 w-[260px] max-w-[260px] truncate text-gray-700 dark:text-gray-200" title={t.summary}>{t.summary}</td>
                         <td className="py-2 px-3"><Badge className={statusStyle(t.status)}>{t.status || '—'}</Badge></td>

@@ -4,6 +4,7 @@ import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets, fetchT
 import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getImproveDocs, saveImproveDoc, updateImproveDocTargetCard, deleteImproveDoc, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback, saveReleaseHistory, getReleaseHistory, deleteReleaseHistory } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 import { fetchJiraIssuesForRelease, generateReleaseWithAI, parseTaskKeys, getAiConfig, saveAiConfig } from './release.js'
+import { sortSprints, compareSprints } from './sprints.js'
 
 const app = express()
 app.use(express.json())
@@ -684,7 +685,7 @@ app.get('/api/automation-analysis', (req, res) => {
   }
   const sprints = [...bySprint.values()]
     .map((row) => ({ ...row, ratio: row.total ? Number(((row.automation / row.total) * 100).toFixed(1)) : 0 }))
-    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+    .sort((a, b) => a.project.localeCompare(b.project) || compareSprints(a.sprint, b.sprint))
   const total = filtered.length
   const automation = filtered.filter(isAutomation).length
   res.json({
@@ -724,7 +725,7 @@ app.get('/api/regression-analysis', (req, res) => {
   }
   const sprints = [...bySprint.values()]
     .map((row) => ({ ...row, covered: row.regressionTasks > 0 }))
-    .sort((a, b) => a.project.localeCompare(b.project) || a.sprint.localeCompare(b.sprint, undefined, { numeric: true, sensitivity: 'base' }))
+    .sort((a, b) => a.project.localeCompare(b.project) || compareSprints(a.sprint, b.sprint))
   const coveredSprints = sprints.filter((row) => row.covered).length
   res.json({
     totalSprints: sprints.length,
@@ -1363,7 +1364,7 @@ app.get('/api/filters', (req, res) => {
     projects: uniq(all.map((x) => x.project)).sort(),
     years: uniq(t.map((x) => x.year)).sort(),
     quarters: uniq(t.map((x) => x.quarter)).sort(),
-    sprints: uniq(t.map((x) => x.sprint)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })),
+    sprints: sortSprints(uniq(t.map((x) => x.sprint))),
     statuses: sortStatuses(uniq(t.map((x) => x.status))),
     labels: FIXED_LABELS,
     types: ['Task', 'Bug', 'Support'],
