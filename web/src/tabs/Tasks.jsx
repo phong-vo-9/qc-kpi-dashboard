@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Search, ExternalLink, Inbox, AlertTriangle, Star, RefreshCw, Zap, Bot, Table2, Clock } from 'lucide-react'
+import { Search, ExternalLink, Inbox, AlertTriangle, Star, RefreshCw, Zap, Bot, Table2, Clock, CheckCircle2, Circle } from 'lucide-react'
 import TaskTimeManagement from './TaskTimeManagement.jsx'
 import { Badge, EmptyState } from '../components/ui.jsx'
 import { statusStyle } from '../lib/tokens.js'
@@ -52,7 +52,13 @@ function EnvironmentBadge({ value }) {
   )
 }
 
-export default function Tasks({ tasks, highlightKey }) {
+export default function Tasks({
+  tasks,
+  highlightKey,
+  sprintAnalysis = [],
+  filters = {},
+  onFilterChange,
+}) {
   const [activeSubTab, setActiveSubTab] = useState('list') // 'list' | 'time'
   const timeAlertCount = useMemo(() => {
     return tasks.filter((t) => t.type !== 'Bug' && (t.isOverlogged || t.isMissingPlan)).length
@@ -67,6 +73,125 @@ export default function Tasks({ tasks, highlightKey }) {
     // Show Task and Support types; Bug goes to the Bugs tab
     return tasks.filter((t) => t.type !== 'Bug')
   }, [tasks])
+
+  const activeSprintNames = useMemo(() => {
+    return (sprintAnalysis || [])
+      .map((s) => s.sprintName)
+      .filter(Boolean)
+  }, [sprintAnalysis])
+
+  const selectedSprints = useMemo(() => {
+    return (filters?.sprint || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }, [filters?.sprint])
+
+  // Current active sprint status
+  const isActiveSprint = useMemo(() => {
+    if (activeSprintNames.length === 0) return false
+    if (selectedSprints.length > 0) {
+      return selectedSprints.some((s) => activeSprintNames.includes(s))
+    }
+    return (
+      taskIssues.length > 0 &&
+      taskIssues.every((t) => t.sprint && activeSprintNames.includes(t.sprint))
+    )
+  }, [selectedSprints, activeSprintNames, taskIssues])
+
+  const activeSprintKey = useMemo(() => {
+    const match = selectedSprints.find((s) => activeSprintNames.includes(s))
+    if (match) return match
+    const fromTasks = taskIssues.find((t) => t.sprint && activeSprintNames.includes(t.sprint))
+    return fromTasks?.sprint || activeSprintNames[0] || 'active'
+  }, [selectedSprints, activeSprintNames, taskIssues])
+
+  // Tự động dọn dẹp các sprint đã kết thúc (không còn active) khỏi localStorage
+  useEffect(() => {
+    if (!activeSprintNames || activeSprintNames.length === 0) return
+    try {
+      const PREFIXES = ['qc_scope_active_', 'qc_scope_reviewed_']
+      const toRemove = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (!key) continue
+        for (const prefix of PREFIXES) {
+          if (key.startsWith(prefix)) {
+            const sprint = key.slice(prefix.length)
+            // Nếu sprint không còn nằm trong activeSprintNames thì dọn dẹp
+            if (sprint && !activeSprintNames.includes(sprint)) {
+              toRemove.push(key)
+            }
+          }
+        }
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k))
+    } catch (err) {
+      console.warn('Cleanup expired sprint scope error', err)
+    }
+  }, [activeSprintNames])
+
+  const [reviewedScopeKeys, setReviewedScopeKeys] = useState(() => {
+    if (!activeSprintKey || activeSprintKey === 'active') return {}
+    try {
+      const raw = localStorage.getItem(`qc_scope_active_${activeSprintKey}`) ||
+                  localStorage.getItem(`qc_scope_reviewed_${activeSprintKey}`) ||
+                  sessionStorage.getItem(`qc_scope_reviewed_${activeSprintKey}`)
+      return raw ? JSON.parse(raw) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    if (!activeSprintKey || activeSprintKey === 'active') {
+      setReviewedScopeKeys({})
+      return
+    }
+    try {
+      const raw = localStorage.getItem(`qc_scope_active_${activeSprintKey}`) ||
+                  localStorage.getItem(`qc_scope_reviewed_${activeSprintKey}`) ||
+                  sessionStorage.getItem(`qc_scope_reviewed_${activeSprintKey}`)
+      setReviewedScopeKeys(raw ? JSON.parse(raw) : {})
+    } catch {
+      setReviewedScopeKeys({})
+    }
+  }, [activeSprintKey])
+
+  const updateScopeKeys = (updater) => {
+    if (!activeSprintKey || activeSprintKey === 'active') return
+    setReviewedScopeKeys((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      try {
+        localStorage.setItem(`qc_scope_active_${activeSprintKey}`, JSON.stringify(next))
+      } catch (err) {
+        console.warn('localStorage error', err)
+      }
+      return next
+    })
+  }
+
+  const toggleScope = (key) => {
+    updateScopeKeys((prev) => {
+      const next = { ...prev }
+      if (next[key]) {
+        delete next[key]
+      } else {
+        next[key] = true
+      }
+      return next
+    })
+  }
+
+  const resetAllScope = () => {
+    updateScopeKeys({})
+  }
+
+  const reviewedCount = useMemo(() => {
+    return taskIssues.filter((t) => !!reviewedScopeKeys[t.key]).length
+  }, [taskIssues, reviewedScopeKeys])
+
+  const percentReviewed = taskIssues.length > 0 ? Math.round((reviewedCount / taskIssues.length) * 100) : 0
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -83,7 +208,7 @@ export default function Tasks({ tasks, highlightKey }) {
       setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortField(field)
-      setSortDirection(field === 'enddate' || field === 'duedate' || field === 'key' ? 'asc' : 'desc')
+      setSortDirection(field === 'enddate' || field === 'duedate' || field === 'key' || field === 'scope' ? 'asc' : 'desc')
     }
   }
 
@@ -114,7 +239,10 @@ export default function Tasks({ tasks, highlightKey }) {
       let valA = a[sortField]
       let valB = b[sortField]
 
-      if (sortField === 'bug') {
+      if (sortField === 'scope') {
+        valA = reviewedScopeKeys[a.key] ? 1 : 0
+        valB = reviewedScopeKeys[b.key] ? 1 : 0
+      } else if (sortField === 'bug') {
         valA = a.bugCount || 0
         valB = b.bugCount || 0
       } else if (sortField === 'qcWeight') {
@@ -137,7 +265,25 @@ export default function Tasks({ tasks, highlightKey }) {
       }
       return sortDirection === 'asc' ? cmp : -cmp
     })
-  }, [filtered, sortField, sortDirection])
+  }, [filtered, sortField, sortDirection, reviewedScopeKeys])
+
+  const allVisibleKeys = useMemo(() => sorted.map((t) => t.key), [sorted])
+  const isAllChecked = allVisibleKeys.length > 0 && allVisibleKeys.every((k) => !!reviewedScopeKeys[k])
+  const isSomeChecked = allVisibleKeys.some((k) => !!reviewedScopeKeys[k])
+
+  const toggleAllVisible = () => {
+    updateScopeKeys((prev) => {
+      const next = { ...prev }
+      if (isAllChecked) {
+        allVisibleKeys.forEach((k) => delete next[k])
+      } else {
+        allVisibleKeys.forEach((k) => {
+          next[k] = true
+        })
+      }
+      return next
+    })
+  }
 
   useEffect(() => setPage(1), [search, pageSize, tasks, sortField])
 
@@ -252,16 +398,53 @@ export default function Tasks({ tasks, highlightKey }) {
         <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-sm">
       {/* Search + count */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-100 dark:border-neutral-800">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo mã task hoặc summary…"
-            className="pl-9 pr-3 py-2 w-72 max-w-full text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm theo mã task hoặc summary…"
+              className="pl-9 pr-3 py-2 w-72 max-w-full text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+          </div>
+          {!isActiveSprint && activeSprintNames[0] && onFilterChange && (
+            <button
+              type="button"
+              onClick={() => onFilterChange((prev) => ({ ...prev, sprint: activeSprintNames[0] }))}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20 border border-blue-200/60 dark:border-blue-500/20 transition-colors cursor-pointer"
+              title="Nhấp để xem Sprint Active và chốt scope"
+            >
+              <span>⚡ Xem Sprint Active: <strong>{activeSprintNames[0]}</strong></span>
+            </button>
+          )}
         </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          {sorted.length} task{sorted.length !== 1 ? 's' : ''}
+
+        <div className="flex items-center gap-3">
+          {isActiveSprint && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50/80 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20 text-xs">
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 size={13} className="stroke-[2.5]" /> Scope:
+              </span>
+              <span className="font-bold tabular-nums text-gray-800 dark:text-gray-100">
+                {reviewedCount}/{taskIssues.length}
+              </span>
+              <span className="text-gray-500 dark:text-gray-400 text-[11px]">
+                ({percentReviewed}%)
+              </span>
+              <span className="text-emerald-200 dark:text-neutral-700 mx-0.5">|</span>
+              <button
+                type="button"
+                onClick={toggleAllVisible}
+                className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline cursor-pointer"
+                title={isAllChecked ? 'Bỏ chọn tất cả task hiển thị' : 'Chốt tất cả task hiển thị'}
+              >
+                {isAllChecked ? 'Bỏ chọn hết' : 'Chốt tất cả'}
+              </button>
+            </div>
+          )}
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {sorted.length} task{sorted.length !== 1 ? 's' : ''}
+          </div>
         </div>
       </div>
 
@@ -274,6 +457,21 @@ export default function Tasks({ tasks, highlightKey }) {
               <thead>
                 <tr className="text-left border-b border-gray-100 dark:border-neutral-800">
                   <SortableTH field="key">Task</SortableTH>
+                  {isActiveSprint && (
+                    <th className="py-2 px-1 text-center font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap text-[13.5px] w-12">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('scope')}
+                        className="inline-flex items-center justify-center gap-0.5 hover:text-gray-800 dark:hover:text-gray-200 transition-colors select-none font-medium mx-auto"
+                        title="Sắp xếp theo Scope (click để đưa task chưa chốt lên đầu)"
+                      >
+                        <span>Scope</span>
+                        <span className="text-[9px] text-gray-400">
+                          {sortField !== 'scope' ? '↕' : sortDirection === 'asc' ? '▲' : '▼'}
+                        </span>
+                      </button>
+                    </th>
+                  )}
                   <TH>Summary</TH>
                   <SortableTH field="type">Type</SortableTH>
                   <SortableTH field="status">Status</SortableTH>
@@ -338,6 +536,28 @@ export default function Tasks({ tasks, highlightKey }) {
                           </a>
                         </div>
                       </td>
+                      {isActiveSprint && (
+                        <td className="py-2 px-1 text-center whitespace-nowrap w-12">
+                          <button
+                            type="button"
+                            onClick={() => toggleScope(t.key)}
+                            title={reviewedScopeKeys[t.key] ? 'Scope đã chốt (click để bỏ chọn)' : 'Click để chốt scope'}
+                            className="group inline-flex items-center justify-center w-6 h-6 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all active:scale-90 cursor-pointer"
+                          >
+                            {reviewedScopeKeys[t.key] ? (
+                              <CheckCircle2
+                                size={17}
+                                className="text-emerald-500 fill-emerald-100 dark:text-emerald-400 dark:fill-emerald-950/70 stroke-[2.2] transition-transform group-hover:scale-110"
+                              />
+                            ) : (
+                              <Circle
+                                size={16}
+                                className="text-gray-300 dark:text-neutral-700 stroke-[1.8] group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition-colors"
+                              />
+                            )}
+                          </button>
+                        </td>
+                      )}
                       <td className="py-2 px-2 max-w-[200px] truncate text-gray-700 dark:text-gray-200 text-[13.5px]" title={t.summary}>
                         {t.summary}
                       </td>

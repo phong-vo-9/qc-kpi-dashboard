@@ -46,8 +46,21 @@ function LoadingSkeleton() {
 
 export default function App() {
   const { isDark, toggle, theme } = useDarkMode()
-  const [tab, setTab] = useState('overview')
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [tab, setTab] = useState(() => {
+    try {
+      return sessionStorage.getItem('qc_dashboard_tab') || 'overview'
+    } catch {
+      return 'overview'
+    }
+  })
+  const [filters, setFilters] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('qc_dashboard_filters')
+      return raw ? { ...EMPTY_FILTERS, ...JSON.parse(raw) } : EMPTY_FILTERS
+    } catch {
+      return EMPTY_FILTERS
+    }
+  })
   const [options, setOptions] = useState({ projects: [], sprints: [], years: [], quarters: [], statuses: [], types: [], labels: [] })
   const [kpi, setKpi] = useState(null)
   const [tasks, setTasks] = useState([])
@@ -58,6 +71,18 @@ export default function App() {
   const [regressionAnalysis, setRegressionAnalysis] = useState(null)
   const [syncStatus, setSyncStatus] = useState('idle') // idle | loading | success | error
   const [highlightKey, setHighlightKey] = useState(null)
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('qc_dashboard_tab', tab)
+    } catch {}
+  }, [tab])
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('qc_dashboard_filters', JSON.stringify(filters))
+    } catch {}
+  }, [filters])
 
   const loadFilterOptions = useCallback(async (project = '') => {
     const filterQ = project ? `?project=${encodeURIComponent(project)}` : ''
@@ -175,7 +200,13 @@ export default function App() {
         ) : tab === 'its' ? (
           <div key={theme}><ItsManagement /></div>
         ) : tab === 'tasks' ? (
-          <Tasks tasks={tasks} highlightKey={highlightKey} />
+          <Tasks
+            tasks={tasks}
+            highlightKey={highlightKey}
+            sprintAnalysis={sprintAnalysis}
+            filters={filters}
+            onFilterChange={setFilters}
+          />
         ) : tab === 'bugs' ? (
           <Bugs tasks={tasks} highlightKey={highlightKey} onNavigateToTask={handleNavigateToTask} currentUser={qcName} />
         ) : (
