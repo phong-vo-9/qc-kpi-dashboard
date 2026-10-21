@@ -7,7 +7,7 @@ export function isTicketOpen(ticket) {
 
 export function isTicketReviewing(ticket) {
   const s = String(ticket.status || '').toLowerCase().trim()
-  return ['in review', 'reviewing', 'under review', 'testing', 'ready to test', 'in progress', 'pending'].includes(s)
+  return ['in review', 'reviewing', 'under review', 'reviewed', 'testing', 'ready to test', 'in progress', 'pending'].includes(s) || s.includes('review')
 }
 
 export function isTicketResolved(ticket) {

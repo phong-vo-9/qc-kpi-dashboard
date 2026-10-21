@@ -1066,7 +1066,10 @@ app.get('/api/bsc', async (req, res) => {
   })
 
   const isTicketOpen = (t) => ['open', 'to do', 'todo', 'waiting for support', 'waiting for customer', 'backlog', 'reopened'].includes(String(t.status || '').toLowerCase().trim())
-  const isTicketReviewing = (t) => ['in review', 'reviewing', 'under review', 'testing', 'ready to test', 'in progress', 'pending'].includes(String(t.status || '').toLowerCase().trim())
+  const isTicketReviewing = (t) => {
+    const s = String(t.status || '').toLowerCase().trim()
+    return ['in review', 'reviewing', 'under review', 'reviewed', 'testing', 'ready to test', 'in progress', 'pending'].includes(s) || s.includes('review')
+  }
   const isTicketResolved = (t) => ['done', 'resolved', 'closed', 'released', 'rejected', 'not reproducible', "won't do", 'cancelled'].includes(String(t.status || '').toLowerCase().trim())
   const isTicketBreached = (t) => Boolean(t.slaResolutionBreached || t.slaFirstResponseBreached)
 

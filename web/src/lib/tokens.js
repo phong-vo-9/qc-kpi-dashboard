@@ -21,6 +21,11 @@ export const STATUS_STYLE = {
   'Ready to Test': 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
   'In Progress': 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
   Todo: 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-300',
+  Reviewed: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
+  'In Review': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
+  Rejected: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+  'Not Reproducible': 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  Closed: 'bg-slate-100 text-slate-700 dark:bg-neutral-800 dark:text-neutral-300',
 }
 export const statusStyle = (s) => STATUS_STYLE[s] || 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-300'
 

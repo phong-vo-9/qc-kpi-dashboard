@@ -104,10 +104,15 @@ export default function ItsFilters({
     onApply(EMPTY_ITS_FILTERS)
   }
 
+  const now = new Date()
+  const currentQuarter = 'Q' + (Math.floor(now.getMonth() / 3) + 1)
+  const currentYear = String(now.getFullYear())
+  const currentQuarterLabel = `Quý ${currentQuarter.replace('Q', '')}/${currentYear}`
+
   const quarters = availableOptions.quarters || ['Q1', 'Q2', 'Q3', 'Q4']
   const years = availableOptions.years || [2026, 2025]
   const labels = availableOptions.labels || ['Q3-2026', 'Q4-2026', 'OperationSupport', 'GMS', 'ahamove', 'data-fix']
-  const statuses = availableOptions.statuses || ['Done', 'Not Reproducible', 'Rejected', 'Closed', 'Open', 'In Progress']
+  const statuses = availableOptions.statuses || ['Done', 'Reviewed', 'Not Reproducible', 'Rejected', 'Closed', 'Open', 'In Progress']
   const types = availableOptions.types || ['Bug', 'Support', 'Incident', 'Task']
   const classifies = availableOptions.classifies || ['Feedback bug', 'Rule sản phẩm', 'Bug can not reproduce', 'Support']
 
@@ -204,17 +209,43 @@ export default function ItsFilters({
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-neutral-800/80">
         <div className="flex items-center gap-2">
-          {/* Quick chip: Q3-2026 */}
+          {/* Quick chip: Quý hiện tại (Quý 4/2026) */}
           <button
             type="button"
             onClick={() => {
-              const next = { ...draft, quarter: 'Q3', year: '2026' }
+              const isCurrentQActive = draft.quarter === currentQuarter && (String(draft.year) === currentYear || !draft.year)
+              const next = isCurrentQActive
+                ? { ...draft, quarter: '', year: '' }
+                : { ...draft, quarter: currentQuarter, year: currentYear }
               setDraft(next)
               onApply(next)
             }}
-            className="text-xs px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:text-blue-300 font-medium transition-colors"
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              draft.quarter === currentQuarter && (String(draft.year) === currentYear || !draft.year)
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:text-blue-300'
+            }`}
           >
-            📅 Quý 3/2026
+            📅 {currentQuarterLabel}
+          </button>
+          {/* Quick chip: Quý 3/2026 */}
+          <button
+            type="button"
+            onClick={() => {
+              const isQ3Active = draft.quarter === 'Q3' && (String(draft.year) === '2026' || !draft.year)
+              const next = isQ3Active
+                ? { ...draft, quarter: '', year: '' }
+                : { ...draft, quarter: 'Q3', year: '2026' }
+              setDraft(next)
+              onApply(next)
+            }}
+            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+              draft.quarter === 'Q3' && (String(draft.year) === '2026' || !draft.year)
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-gray-300'
+            }`}
+          >
+            Quý 3/2026
           </button>
           {/* Quick chip: Trễ SLA */}
           <button
