@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { LayoutDashboard, Table2, Bug, Layers3, Award, FileText, Headphones, Clock, Rocket } from 'lucide-react'
+import { LayoutDashboard, Table2, Bug, Layers3, Award, FileText, Headphones, Clock, Rocket, AlertCircle } from 'lucide-react'
 import Header from './components/Header.jsx'
 import Filters, { EMPTY_FILTERS } from './components/Filters.jsx'
 import { Skeleton } from './components/ui.jsx'
@@ -8,6 +8,7 @@ import BscStats from './tabs/BscStats.jsx'
 import TimeManagement from './tabs/TimeManagement.jsx'
 import ClearDoc from './tabs/ClearDoc.jsx'
 import ItsManagement from './tabs/ItsManagement.jsx'
+import IssuesManagement from './tabs/IssuesManagement.jsx'
 import Tasks from './tabs/Tasks.jsx'
 import Bugs from './tabs/Bugs.jsx'
 import BugBacklog from './tabs/BugBacklog.jsx'
@@ -16,17 +17,19 @@ import { api, query } from './lib/api.js'
 import { useDarkMode } from './lib/useDarkMode.js'
 import { refreshTempoData } from './components/TempoReminder.jsx'
 import ScrollToTop from './components/ScrollToTop.jsx'
+import TabBar from './components/TabBar.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
-  { id: 'tasks', label: 'Danh sách Task', icon: Table2 },
-  { id: 'bugs', label: 'Danh sách Bug', icon: Bug },
-  { id: 'bsc', label: 'Thống kê BSC', icon: Award },
-  { id: 'time', label: 'Quản lý Time', icon: Clock },
-  { id: 'clear-doc', label: 'Clear & Improve doc', icon: FileText },
+  { id: 'tasks', label: 'Tasks', fullLabel: 'Danh sách Task', icon: Table2 },
+  { id: 'bugs', label: 'Bugs', fullLabel: 'Danh sách Bug', icon: Bug },
+  { id: 'bsc', label: 'BSC', fullLabel: 'Thống kê BSC', icon: Award },
+  { id: 'time', label: 'Time', fullLabel: 'Quản lý Time & Log work', icon: Clock },
+  { id: 'clear-doc', label: 'Clear Doc', fullLabel: 'Clear & Improve doc', icon: FileText },
   { id: 'release', label: 'Release', icon: Rocket },
-  { id: 'its', label: 'Quản lý ITS', icon: Headphones },
-  { id: 'bug-backlog', label: 'Bug backlog', icon: Layers3 },
+  { id: 'its', label: 'ITS', fullLabel: 'Quản lý ITS & Feedback', icon: Headphones },
+  { id: 'issues', label: 'Vấn đề', fullLabel: 'Quản lý Vấn đề', icon: AlertCircle },
+  { id: 'bug-backlog', label: 'Bug Backlog', fullLabel: 'Danh sách Bug backlog', icon: Layers3 },
 ]
 
 function LoadingSkeleton() {
@@ -155,26 +158,10 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Tabs (§1) */}
-        <div className="flex gap-1 p-1 bg-gray-100 dark:bg-neutral-900 rounded-xl overflow-x-auto max-w-full scrollbar-none items-center">
-          {TABS.map((t) => {
-            const Icon = t.icon
-            const active = tab === t.id
-            return (
-              <button
-                key={t.id} onClick={() => setTab(t.id)}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${active
-                    ? 'bg-white dark:bg-neutral-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                  }`}
-              >
-                <Icon size={14} className="shrink-0" /> {t.label}
-              </button>
-            )
-          })}
-        </div>
+        <TabBar tabs={TABS} activeTab={tab} onSelectTab={setTab} />
 
         {/* Global filters (§3) */}
-        {tab !== 'bug-backlog' && tab !== 'bsc' && tab !== 'clear-doc' && tab !== 'release' && tab !== 'its' && tab !== 'time' && (
+        {tab !== 'bug-backlog' && tab !== 'bsc' && tab !== 'clear-doc' && tab !== 'release' && tab !== 'its' && tab !== 'time' && tab !== 'issues' && (
           <Filters
             options={options}
             applied={filters}
@@ -199,6 +186,8 @@ export default function App() {
           <div key={theme}><ClearDoc tasks={tasks} mode={mode} onNavigateToTask={handleNavigateToTask} /></div>
         ) : tab === 'its' ? (
           <div key={theme}><ItsManagement /></div>
+        ) : tab === 'issues' ? (
+          <div key={theme}><IssuesManagement mode={mode} currentUser={qcName} /></div>
         ) : tab === 'tasks' ? (
           <Tasks
             tasks={tasks}

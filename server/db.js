@@ -109,6 +109,20 @@ CREATE TABLE IF NOT EXISTS release_history (
   scope_msg TEXT,
   created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS issues (
+  id TEXT PRIMARY KEY,
+  created_date TEXT NOT NULL,
+  title TEXT,
+  content TEXT NOT NULL,
+  links TEXT DEFAULT '[]',
+  solution TEXT,
+  status TEXT DEFAULT 'open',
+  priority TEXT DEFAULT 'medium',
+  project TEXT DEFAULT 'GOP',
+  assignee TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
 `)
 
 try { db.exec('ALTER TABLE tasks ADD COLUMN sprint TEXT;'); } catch (e) {}
@@ -815,6 +829,190 @@ export function deleteReleaseHistory(id) {
   return db.prepare('DELETE FROM release_history WHERE id = ?').run(id)
 }
 
+// ==========================================
+// Issues Management (Quản lý Vấn đề)
+// ==========================================
+
+const insertIssue = db.prepare(`
+  INSERT INTO issues (
+    id, created_date, title, content, links, solution, status, priority, project, assignee, created_at, updated_at
+  ) VALUES (
+    @id, @created_date, @title, @content, @links, @solution, @status, @priority, @project, @assignee, @created_at, @updated_at
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    created_date = excluded.created_date,
+    title = excluded.title,
+    content = excluded.content,
+    links = excluded.links,
+    solution = excluded.solution,
+    status = excluded.status,
+    priority = excluded.priority,
+    project = excluded.project,
+    assignee = excluded.assignee,
+    updated_at = excluded.updated_at
+`)
+
+export function saveIssue(item) {
+  const now = new Date().toISOString()
+  const id = item.id || 'iss_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+  const linksJson = Array.isArray(item.links)
+    ? JSON.stringify(item.links)
+    : (typeof item.links === 'string' && item.links.trim() ? item.links : '[]')
+
+  insertIssue.run({
+    id,
+    created_date: item.createdDate || item.created_date || now.split('T')[0],
+    title: (item.title || '').trim(),
+    content: (item.content || '').trim(),
+    links: linksJson,
+    solution: (item.solution || '').trim(),
+    status: item.status || 'open',
+    priority: item.priority || 'medium',
+    project: item.project || 'GOP',
+    assignee: item.assignee || '',
+    created_at: item.createdAt || item.created_at || now,
+    updated_at: now,
+  })
+
+  return {
+    id,
+    createdDate: item.createdDate || item.created_date || now.split('T')[0],
+    title: (item.title || '').trim(),
+    content: (item.content || '').trim(),
+    links: typeof linksJson === 'string' ? JSON.parse(linksJson) : linksJson,
+    solution: (item.solution || '').trim(),
+    status: item.status || 'open',
+    priority: item.priority || 'medium',
+    project: item.project || 'GOP',
+    assignee: item.assignee || '',
+    createdAt: item.createdAt || item.created_at || now,
+    updatedAt: now,
+  }
+}
+
+export function getIssues(filters = {}) {
+  let query = 'SELECT * FROM issues'
+  const conditions = []
+  const params = []
+
+  if (filters.fromDate) {
+    conditions.push('created_date >= ?')
+    params.push(filters.fromDate)
+  }
+  if (filters.toDate) {
+    conditions.push('created_date <= ?')
+    params.push(filters.toDate)
+  }
+  if (filters.status && filters.status !== 'all') {
+    conditions.push('status = ?')
+    params.push(filters.status)
+  }
+  if (filters.priority && filters.priority !== 'all') {
+    conditions.push('priority = ?')
+    params.push(filters.priority)
+  }
+  if (filters.project && filters.project !== 'all') {
+    conditions.push('project = ?')
+    params.push(filters.project)
+  }
+  if (filters.search && filters.search.trim()) {
+    const s = `%${filters.search.trim()}%`
+    conditions.push('(title LIKE ? OR content LIKE ? OR solution LIKE ?)')
+    params.push(s, s, s)
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ')
+  }
+  query += ' ORDER BY created_date DESC, created_at DESC'
+
+  const rows = db.prepare(query).all(...params)
+  return rows.map((r) => {
+    let parsedLinks = []
+    try {
+      parsedLinks = r.links ? JSON.parse(r.links) : []
+    } catch {
+      parsedLinks = []
+    }
+    return {
+      id: r.id,
+      createdDate: r.created_date,
+      title: r.title || '',
+      content: r.content || '',
+      links: Array.isArray(parsedLinks) ? parsedLinks : [],
+      solution: r.solution || '',
+      status: r.status || 'open',
+      priority: r.priority || 'medium',
+      project: r.project || 'GOP',
+      assignee: r.assignee || '',
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }
+  })
+}
+
+export function deleteIssue(id) {
+  return db.prepare('DELETE FROM issues WHERE id = ?').run(id)
+}
+
+export function getIssueStats(filters = {}) {
+  const issues = getIssues(filters)
+  const total = issues.length
+  const openCount = issues.filter((i) => i.status === 'open' || i.status === 'in_progress').length
+  const resolvedCount = issues.filter((i) => i.status === 'resolved' || i.status === 'closed').length
+  const criticalCount = issues.filter((i) => i.priority === 'critical' || i.priority === 'high').length
+  const resolvedRate = total > 0 ? Math.round((resolvedCount / total) * 100) : 0
+
+  return {
+    total,
+    openCount,
+    resolvedCount,
+    criticalCount,
+    resolvedRate,
+  }
+}
+
+// Seed sample issues if empty
+try {
+  const count = db.prepare('SELECT count(*) as c FROM issues').get()?.c || 0
+  if (count === 0) {
+    saveIssue({
+      id: 'iss_sample_1',
+      createdDate: '2026-03-15',
+      title: 'Môi trường Staging bị lỗi 502 khi gọi API tính giá vé nâng cấp',
+      content: 'Trong đợt release tính năng mới, môi trường Staging gateway trả về 502 Bad Gateway liên tục khi user thực hiện chọn ghế VIP và tính phụ phí. Nghi ngờ xung đột service định giá.',
+      links: [
+        { title: 'Slack trao đổi với Backend Team', url: 'https://vexere.slack.com/archives/C018WQWPR9Q/p1784016615812979' },
+        { title: 'Jira Task phát sinh', url: 'https://jira.vexere.net/browse/GOP-1425' },
+        { title: 'Log Datadog ghi nhận lỗi', url: 'https://app.datadoghq.com/logs' }
+      ],
+      solution: 'Backend đã rollback commit cấu hình rate limit ở API Gateway. QC đã test lại 15 kịch bản đặt vé trên Staging và xác nhận hoạt động bình thường, không còn lỗi 502.',
+      status: 'resolved',
+      priority: 'high',
+      project: 'GOP',
+      assignee: 'QC',
+    })
+    saveIssue({
+      id: 'iss_sample_2',
+      createdDate: '2026-03-20',
+      title: 'Thiếu tài liệu đặc tả (BRD) cho kịch bản hoàn tiền tự động qua ZaloPay',
+      content: 'Khi thực hiện test case hoàn tiền vé qua ZaloPay, phát hiện kịch bản khách hủy vé sát giờ khởi hành (dưới 2 tiếng) chưa có quy chuẩn hoàn bao nhiêu % và phí giao dịch xử lý ra sao.',
+      links: [
+        { title: 'Thread thảo luận với Product Owner', url: 'https://vexere.slack.com/archives/C02XYZ123/p178401999999' },
+        { title: 'Tài liệu Confluence cần bổ sung', url: 'https://wiki.vexere.net/pages/viewpage.action?pageId=987654' }
+      ],
+      solution: 'PO đã họp thống nhất với Finance và cập nhật mục 3.4 trong tài liệu Confluence. Đã tạo ticket follow-up để Dev điều chỉnh logic khấu trừ.',
+      status: 'open',
+      priority: 'medium',
+      project: 'GOP',
+      assignee: 'QC',
+    })
+  }
+} catch (e) {
+  console.error('Lỗi khởi tạo mẫu Issues:', e.message)
+}
+
 export default db
+
 
 

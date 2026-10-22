@@ -9,6 +9,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar,
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar,
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 html { font-family: 'Inter', system-ui, sans-serif; }
 
 /* Smooth theme switch. */
@@ -17,3 +29,4 @@ html { font-family: 'Inter', system-ui, sans-serif; }
 /* Recharts: keep focus outlines off the SVG sectors. */
 .recharts-wrapper:focus,
 .recharts-surface:focus { outline: none; }
+

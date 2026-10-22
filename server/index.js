@@ -1,10 +1,11 @@
 import './env.js' // must be first: loads ../.env into process.env
 import express from 'express'
 import { fetchTasks, fetchActiveSprint, fetchBugBacklog, fetchItsTickets, fetchTempoWorklogs, fetchTempoAllocations } from './jira.js'
-import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getImproveDocs, saveImproveDoc, updateImproveDocTargetCard, deleteImproveDoc, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback, saveReleaseHistory, getReleaseHistory, deleteReleaseHistory } from './db.js'
+import { saveTasks, saveBugBacklog, getTasks, getBugBacklog, getMeta, getClearDocs, saveClearDoc, deleteClearDoc, getClearDocTaskStatuses, setClearDocTaskStatus, deleteClearDocTaskStatus, getImproveDocs, saveImproveDoc, updateImproveDocTargetCard, deleteImproveDoc, getItsTickets, saveItsTickets, clearItsTickets, deleteItsTicket, getNonItsFeedbacks, saveNonItsFeedback, deleteNonItsFeedback, saveReleaseHistory, getReleaseHistory, deleteReleaseHistory, saveIssue, getIssues, deleteIssue, getIssueStats } from './db.js'
 import { STATUS_ORDER, computeAggregates, decorate } from './kpi.js'
 import { fetchJiraIssuesForRelease, generateReleaseWithAI, parseTaskKeys, getAiConfig, saveAiConfig } from './release.js'
 import { sortSprints, compareSprints } from './sprints.js'
+import { parseIssueWithAI } from './issues-ai.js'
 
 const app = express()
 app.use(express.json())
@@ -516,6 +517,73 @@ app.delete('/api/non-its-feedbacks/:id', (req, res) => {
     res.status(500).json({ error: err.message })
   }
 })
+
+// Issues Management (Quản lý Vấn đề) APIs
+app.get('/api/issues', (req, res) => {
+  try {
+    const list = getIssues(req.query)
+    res.json(list)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/issues/stats', (req, res) => {
+  try {
+    const stats = getIssueStats(req.query)
+    res.json(stats)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/issues', (req, res) => {
+  try {
+    if (!req.body || (!req.body.content && !req.body.title)) {
+      return res.status(400).json({ error: 'Nội dung hoặc tiêu đề vấn đề không được để trống' })
+    }
+    const saved = saveIssue(req.body)
+    res.json({ success: true, item: saved, id: saved.id })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/issues/:id', (req, res) => {
+  try {
+    if (!req.body || (!req.body.content && !req.body.title)) {
+      return res.status(400).json({ error: 'Nội dung hoặc tiêu đề vấn đề không được để trống' })
+    }
+    const saved = saveIssue({ ...req.body, id: req.params.id })
+    res.json({ success: true, item: saved, id: saved.id })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/issues/:id', (req, res) => {
+  try {
+    deleteIssue(req.params.id)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// AI Parse & Refine Issue endpoint
+app.post('/api/issues/ai-parse', async (req, res) => {
+  try {
+    const { text, customPrompt } = req.body || {}
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp nội dung mô tả vấn đề' })
+    }
+    const result = await parseIssueWithAI(text, customPrompt)
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 
 // AI Parse Clear Doc endpoint
 app.post('/api/ai/parse-clear-doc', (req, res) => {
