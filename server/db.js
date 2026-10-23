@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS issues (
   created_date TEXT NOT NULL,
   title TEXT,
   content TEXT NOT NULL,
+  images TEXT DEFAULT '[]',
   links TEXT DEFAULT '[]',
   solution TEXT,
   status TEXT DEFAULT 'open',
@@ -145,6 +146,7 @@ try { db.exec('ALTER TABLE bug_backlog ADD COLUMN planSeconds REAL DEFAULT 0;');
 try { db.exec('ALTER TABLE bug_backlog ADD COLUMN loggedSeconds REAL DEFAULT 0;'); } catch (e) {}
 try { db.exec('ALTER TABLE its_tickets ADD COLUMN sla_first_response_detail TEXT;'); } catch (e) {}
 try { db.exec('ALTER TABLE its_tickets ADD COLUMN sla_resolution_detail TEXT;'); } catch (e) {}
+try { db.exec("ALTER TABLE issues ADD COLUMN images TEXT DEFAULT '[]';"); } catch (e) {}
 
 const ISSUE_COLUMNS = 'key,summary,status,priority,assignee,assignedQC,qcWeight,storyPoints,environment,labels,project,component,created,updated,duedate,bugCount,sprint,type,enddate,reporter,linkedTask,planSeconds,loggedSeconds'
 const ISSUE_VALUES = '@key,@summary,@status,@priority,@assignee,@assignedQC,@qcWeight,@storyPoints,@environment,@labels,@project,@component,@created,@updated,@duedate,@bugCount,@sprint,@type,@enddate,@reporter,@linkedTask,@planSeconds,@loggedSeconds'
@@ -835,14 +837,15 @@ export function deleteReleaseHistory(id) {
 
 const insertIssue = db.prepare(`
   INSERT INTO issues (
-    id, created_date, title, content, links, solution, status, priority, project, assignee, created_at, updated_at
+    id, created_date, title, content, images, links, solution, status, priority, project, assignee, created_at, updated_at
   ) VALUES (
-    @id, @created_date, @title, @content, @links, @solution, @status, @priority, @project, @assignee, @created_at, @updated_at
+    @id, @created_date, @title, @content, @images, @links, @solution, @status, @priority, @project, @assignee, @created_at, @updated_at
   )
   ON CONFLICT(id) DO UPDATE SET
     created_date = excluded.created_date,
     title = excluded.title,
     content = excluded.content,
+    images = excluded.images,
     links = excluded.links,
     solution = excluded.solution,
     status = excluded.status,
@@ -855,6 +858,9 @@ const insertIssue = db.prepare(`
 export function saveIssue(item) {
   const now = new Date().toISOString()
   const id = item.id || 'iss_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+  const imagesJson = Array.isArray(item.images)
+    ? JSON.stringify(item.images)
+    : (typeof item.images === 'string' && item.images.trim() ? item.images : '[]')
   const linksJson = Array.isArray(item.links)
     ? JSON.stringify(item.links)
     : (typeof item.links === 'string' && item.links.trim() ? item.links : '[]')
@@ -864,6 +870,7 @@ export function saveIssue(item) {
     created_date: item.createdDate || item.created_date || now.split('T')[0],
     title: (item.title || '').trim(),
     content: (item.content || '').trim(),
+    images: imagesJson,
     links: linksJson,
     solution: (item.solution || '').trim(),
     status: item.status || 'open',
@@ -879,6 +886,7 @@ export function saveIssue(item) {
     createdDate: item.createdDate || item.created_date || now.split('T')[0],
     title: (item.title || '').trim(),
     content: (item.content || '').trim(),
+    images: typeof imagesJson === 'string' ? JSON.parse(imagesJson) : imagesJson,
     links: typeof linksJson === 'string' ? JSON.parse(linksJson) : linksJson,
     solution: (item.solution || '').trim(),
     status: item.status || 'open',
@@ -928,6 +936,12 @@ export function getIssues(filters = {}) {
 
   const rows = db.prepare(query).all(...params)
   return rows.map((r) => {
+    let parsedImages = []
+    try {
+      parsedImages = r.images ? JSON.parse(r.images) : []
+    } catch {
+      parsedImages = []
+    }
     let parsedLinks = []
     try {
       parsedLinks = r.links ? JSON.parse(r.links) : []
@@ -939,6 +953,7 @@ export function getIssues(filters = {}) {
       createdDate: r.created_date,
       title: r.title || '',
       content: r.content || '',
+      images: Array.isArray(parsedImages) ? parsedImages : [],
       links: Array.isArray(parsedLinks) ? parsedLinks : [],
       solution: r.solution || '',
       status: r.status || 'open',

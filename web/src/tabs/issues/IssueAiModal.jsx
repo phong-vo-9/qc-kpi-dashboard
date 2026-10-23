@@ -92,6 +92,7 @@ export default function IssueAiModal({
         createdDate: new Date().toISOString().split('T')[0],
         title: res.title || '',
         content: res.content || rawText.trim(),
+        images: Array.isArray(res.images) ? res.images : [],
         links: Array.isArray(res.links) ? res.links : [],
         solution: res.solution || '',
         priority: res.priority || 'medium',
@@ -154,6 +155,7 @@ export default function IssueAiModal({
         solution: parsedData.solution.trim(),
         priority: parsedData.priority,
         status: parsedData.status,
+        images: Array.isArray(parsedData.images) ? parsedData.images : [],
         links: validLinks,
         assignee: currentUser,
       })

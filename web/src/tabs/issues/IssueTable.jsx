@@ -5,11 +5,12 @@ import {
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   AlertCircle, CheckCircle2, Clock, CheckCheck, ShieldAlert,
   AlertTriangle, HelpCircle, Link as LinkIcon, MessageSquare,
-  FileText, CornerDownRight, Lightbulb, X
+  FileText, CornerDownRight, Lightbulb, X, Eye, Image as ImageIcon
 } from 'lucide-react'
 import {
   formatDateDmy, detectLinkType, STATUS_META, PRIORITY_META
 } from './issue-utils.js'
+import IssueImageViewer from './IssueImageViewer.jsx'
 
 const PAGE_SIZES = [10, 20, 50, 100]
 
@@ -26,6 +27,7 @@ export default function IssueTable({
   const [copiedLinkIndex, setCopiedLinkIndex] = useState(null)
   const [copiedContentId, setCopiedContentId] = useState(null)
   const [deletingIssue, setDeletingIssue] = useState(null)
+  const [viewerData, setViewerData] = useState(null)
 
   // Toggle expand row
   const toggleExpand = (id) => {
@@ -70,6 +72,7 @@ export default function IssueTable({
             <tr className="bg-gray-50/80 dark:bg-neutral-800/60 border-b border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider text-[11px]">
               <th className="py-3 px-3.5 w-28 whitespace-nowrap">Ngày tạo</th>
               <th className="py-3 px-3.5 min-w-[280px]">Nội dung vấn đề</th>
+              <th className="py-3 px-3.5 w-24 whitespace-nowrap text-center">Hình ảnh</th>
               <th className="py-3 px-3.5 min-w-[200px] w-56">Link trao đổi / Minh chứng</th>
               <th className="py-3 px-3.5 min-w-[240px]">Hướng giải quyết</th>
               <th className="py-3 px-3.5 w-36 whitespace-nowrap">Trạng thái</th>
@@ -80,7 +83,7 @@ export default function IssueTable({
           <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
             {paginatedIssues.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-gray-400 dark:text-gray-500">
+                <td colSpan={8} className="py-12 text-center text-gray-400 dark:text-gray-500">
                   <div className="flex flex-col items-center justify-center space-y-3">
                     <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-neutral-800 flex items-center justify-center text-gray-400">
                       <AlertCircle size={24} />
@@ -110,6 +113,9 @@ export default function IssueTable({
                 const StatusIcon = statusInfo.icon
                 const PriorityIcon = priorityInfo.icon
                 const linksList = Array.isArray(issue.links) ? issue.links : []
+                const imagesList = (Array.isArray(issue.images) ? issue.images : [])
+                  .map((img) => (typeof img === 'string' ? { url: img, name: 'Hình ảnh' } : img))
+                  .filter((img) => img && img.url)
 
                 return (
                   <tr
@@ -158,7 +164,45 @@ export default function IssueTable({
                       </div>
                     </td>
 
-                    {/* 3. Link trao đổi / Minh chứng (Nhiều link) */}
+                    {/* 3. Hình ảnh */}
+                    <td className="py-3.5 px-3.5 whitespace-nowrap text-center">
+                      {imagesList.length === 0 ? (
+                        <span className="text-gray-300 dark:text-neutral-600 select-none text-xs">—</span>
+                      ) : (
+                        <div className="flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setViewerData({
+                                images: imagesList,
+                                index: 0,
+                                title: issue.title || issue.content,
+                              })
+                            }
+                            className="group relative w-12 h-10 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-100 dark:bg-neutral-800 overflow-hidden shadow-2xs hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer"
+                            title={imagesList.length > 1 ? `Xem ${imagesList.length} hình ảnh` : 'Bấm để phóng to xem ảnh'}
+                          >
+                            <img
+                              src={imagesList[0].url}
+                              alt={imagesList[0].name || 'Hình ảnh'}
+                              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110"
+                              loading="lazy"
+                            />
+                            {imagesList.length > 1 && (
+                              <div className="absolute bottom-0.5 right-0.5 px-1 py-0.2 rounded bg-black/80 text-white text-[9px] font-bold flex items-center gap-0.5 shadow-xs backdrop-blur-2xs">
+                                <ImageIcon size={8} />
+                                <span>+{imagesList.length - 1}</span>
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <Eye size={13} className="text-white drop-shadow" />
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 4. Link trao đổi / Minh chứng (Nhiều link) */}
                     <td className="py-3.5 px-3.5">
                       {linksList.length === 0 ? (
                         <span className="text-gray-300 dark:text-neutral-600 italic">Không có link</span>
@@ -407,6 +451,16 @@ export default function IssueTable({
           </div>,
           document.body
         )}
+
+      {/* Lightbox Image Viewer */}
+      {viewerData && (
+        <IssueImageViewer
+          images={viewerData.images}
+          initialIndex={viewerData.index}
+          title={viewerData.title}
+          onClose={() => setViewerData(null)}
+        />
+      )}
     </div>
   )
 }

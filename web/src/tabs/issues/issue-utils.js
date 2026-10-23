@@ -105,3 +105,82 @@ export const PRIORITY_META = {
     icon: HelpCircle,
   },
 }
+
+/**
+ * Nén ảnh tự động phía Client trước khi lưu để đảm bảo tốc độ và dung lượng nhẹ
+ */
+export function compressImageFile(file, maxWidth = 1600, maxHeight = 1600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type?.startsWith('image/')) {
+      return reject(new Error('Tệp không phải là hình ảnh hợp lệ'))
+    }
+
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Không thể đọc file ảnh'))
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = () => reject(new Error('Không thể tải dữ liệu ảnh'))
+      img.onload = () => {
+        let width = img.width
+        let height = img.height
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height)
+          width = Math.round(width * ratio)
+          height = Math.round(height * ratio)
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+
+        // Nền trắng cho ảnh trong suốt tránh nền đen
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, width, height)
+        ctx.drawImage(img, 0, 0, width, height)
+
+        try {
+          const webpData = canvas.toDataURL('image/webp', quality)
+          if (webpData.startsWith('data:image/webp')) {
+            const approxBytes = Math.round((webpData.length * 3) / 4)
+            return resolve({
+              url: webpData,
+              name: file.name ? file.name.replace(/\.[^/.]+$/, '') + '.webp' : `screenshot_${Date.now()}.webp`,
+              size: approxBytes,
+              width,
+              height,
+            })
+          }
+        } catch {}
+
+        const jpegData = canvas.toDataURL('image/jpeg', quality)
+        const approxBytes = Math.round((jpegData.length * 3) / 4)
+        resolve({
+          url: jpegData,
+          name: file.name ? file.name.replace(/\.[^/.]+$/, '') + '.jpg' : `screenshot_${Date.now()}.jpg`,
+          size: approxBytes,
+          width,
+          height,
+        })
+      }
+      img.src = reader.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+export function formatBytes(bytes, decimals = 1) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const dm = decimals < 0 ? 0 : decimals
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+}
+
+export function isImageUrl(url = '') {
+  if (!url) return false
+  if (url.startsWith('data:image/')) return true
+  return /\.(png|jpe?g|webp|gif|svg|bmp)(\?.*)?$/i.test(url)
+}

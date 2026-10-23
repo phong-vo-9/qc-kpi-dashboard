@@ -25,9 +25,19 @@ export function parseIssueFallback(rawText = '') {
 
   // Deduplicate URLs
   const uniqueUrls = [...new Set(urls)]
-  const links = uniqueUrls.map((u) => {
-    let title = 'Link tài liệu'
+  const images = []
+  const links = []
+
+  uniqueUrls.forEach((u) => {
     const lower = u.toLowerCase()
+    const isImage = /\.(png|jpe?g|webp|gif|svg|bmp)(\?.*)?$/i.test(u) ||
+      lower.includes('imgur.com') || lower.includes('prnt.sc') || lower.includes('/attachments/')
+
+    if (isImage) {
+      images.push({ url: u, name: 'Ảnh đính kèm' })
+    }
+
+    let title = 'Link tài liệu'
     if (lower.includes('slack.com')) title = 'Thread Slack'
     else if (lower.includes('jira') || lower.includes('/browse/')) {
       const issueKey = u.match(/[A-Z0-9]+-\d+/i)
@@ -37,7 +47,8 @@ export function parseIssueFallback(rawText = '') {
     } else if (lower.includes('sheets.google')) title = 'Google Sheets'
     else if (lower.includes('figma.com')) title = 'Figma UI'
     else if (lower.includes('github.com') || lower.includes('gitlab.com')) title = 'Git Repository'
-    return { title, url: u }
+
+    links.push({ title, url: u })
   })
 
   // Extract title and content
@@ -74,6 +85,7 @@ export function parseIssueFallback(rawText = '') {
   return {
     title,
     content: text,
+    images,
     links,
     solution,
     priority,
@@ -206,6 +218,7 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON THUẦN (Không bao gồm mar
     return {
       title: (parsed.title || '').trim(),
       content: (parsed.content || '').trim(),
+      images: Array.isArray(parsed.images) ? parsed.images : [],
       links: Array.isArray(parsed.links) ? parsed.links : [],
       solution: (parsed.solution || '').trim(),
       priority: ['critical', 'high', 'medium', 'low'].includes(parsed.priority) ? parsed.priority : 'medium',
