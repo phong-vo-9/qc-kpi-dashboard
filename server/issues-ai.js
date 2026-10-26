@@ -148,8 +148,12 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON THUẦN (Không bao gồm mar
     let rawOutput = ''
 
     if (config.provider === 'gemini') {
-      let modelName = config.model || 'gemini-3.8-flash'
-      if (modelName === 'gemini-2.5-flash') modelName = 'gemini-3.8-flash'
+      const candidateModels = Array.from(new Set([
+        config.model,
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
+      ])).filter(Boolean)
 
       const callGemini = async (mName) => {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(mName)}:generateContent?key=${config.apiKey}`
@@ -166,16 +170,32 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON THUẦN (Không bao gồm mar
         })
       }
 
-      let response = await callGemini(modelName)
-      // Retry once on 503 high demand
-      if (!response.ok && response.status === 503) {
-        await new Promise((r) => setTimeout(r, 1000))
-        response = await callGemini(modelName)
+      let response = null
+      let lastErrMsg = ''
+
+      for (const mName of candidateModels) {
+        try {
+          const res = await callGemini(mName)
+          if (res.ok) {
+            response = res
+            break
+          }
+          const errBody = await res.text()
+          lastErrMsg = `Gemini API lỗi (${res.status}): ${errBody}`
+          if (res.status === 404 || res.status === 503) {
+            console.warn(`[Issues AI] Model ${mName} gặp sự cố (${res.status}), thử model thay thế tiếp theo...`)
+            continue
+          } else {
+            throw new Error(lastErrMsg)
+          }
+        } catch (fetchErr) {
+          lastErrMsg = fetchErr.message
+          console.warn(`[Issues AI] Không thể gọi model ${mName}: ${fetchErr.message}`)
+        }
       }
 
-      if (!response.ok) {
-        const errText = await response.text()
-        throw new Error(`Gemini API lỗi (${response.status}): ${errText}`)
+      if (!response || !response.ok) {
+        throw new Error(lastErrMsg || 'Không thể kết nối đến Gemini API')
       }
 
       const resData = await response.json()

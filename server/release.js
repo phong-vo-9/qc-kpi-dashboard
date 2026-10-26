@@ -139,10 +139,10 @@ export function getAiConfig() {
   const provider = parsed.provider || process.env.AI_PROVIDER || 'gemini'
   const apiKey = parsed.apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || ''
   
-  // Nâng cấp model mặc định lên gemini-3.8-flash (tránh lỗi 404 của gemini-2.5-flash cũ)
+  // Nâng cấp model mặc định lên gemini-3.5-flash (nhanh, ổn định, tránh lỗi 503/404)
   let model = parsed.model
   if (!model || model === 'gemini-2.5-flash') {
-    model = provider === 'gemini' ? 'gemini-3.8-flash' : provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini'
+    model = provider === 'gemini' ? 'gemini-3.5-flash' : provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini'
   }
 
   const teamName = parsed.teamName || 'Team GMS'
@@ -165,7 +165,7 @@ export function saveAiConfig(cfg) {
   const current = getAiConfig()
   let targetModel = cfg.model || current.model
   if (targetModel === 'gemini-2.5-flash') {
-    targetModel = 'gemini-3.8-flash'
+    targetModel = 'gemini-3.5-flash'
   }
 
   const updated = {
@@ -317,15 +317,19 @@ YÊU CẦU ĐẦU RA:
     let rawOutput = ''
 
     if (config.provider === 'gemini') {
-      // Model gemini-3.8-flash (hoặc fallback nếu lỗi)
-      let modelName = config.model || 'gemini-3.8-flash'
-      if (modelName === 'gemini-2.5-flash') modelName = 'gemini-3.8-flash'
+      const candidateModels = Array.from(new Set([
+        config.model,
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
+      ])).filter(Boolean)
 
       const callGemini = async (mName) => {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(mName)}:generateContent?key=${config.apiKey}`
         return fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(30000),
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
@@ -336,18 +340,32 @@ YÊU CẦU ĐẦU RA:
         })
       }
 
-      let response = await callGemini(modelName)
+      let response = null
+      let lastErrMsg = ''
 
-      // Nếu model cũ bị 404, tự động fallback sang gemini-3.8-flash
-      if (!response.ok && response.status === 404 && modelName !== 'gemini-3.8-flash') {
-        console.log(`Model ${modelName} bị 404, tự động chuyển sang gemini-3.8-flash...`)
-        modelName = 'gemini-3.8-flash'
-        response = await callGemini(modelName)
+      for (const mName of candidateModels) {
+        try {
+          const res = await callGemini(mName)
+          if (res.ok) {
+            response = res
+            break
+          }
+          const errBody = await res.text()
+          lastErrMsg = `Gemini API lỗi (${res.status}): ${errBody}`
+          if (res.status === 404 || res.status === 503) {
+            console.warn(`Model ${mName} gặp sự cố (${res.status}), thử model thay thế tiếp theo...`)
+            continue
+          } else {
+            throw new Error(lastErrMsg)
+          }
+        } catch (fetchErr) {
+          lastErrMsg = fetchErr.message
+          console.warn(`Không thể gọi model ${mName}: ${fetchErr.message}`)
+        }
       }
 
-      if (!response.ok) {
-        const errText = await response.text()
-        throw new Error(`Gemini API lỗi (${response.status}): ${errText}`)
+      if (!response || !response.ok) {
+        throw new Error(lastErrMsg || 'Không thể kết nối đến Gemini API')
       }
 
       const resData = await response.json()

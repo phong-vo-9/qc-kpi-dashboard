@@ -6,7 +6,7 @@ import { api } from '../../lib/api.js'
 export function ReleaseAiSettingsModal({ isOpen, onClose, onSaved }) {
   const [provider, setProvider] = useState('gemini')
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('gemini-3.8-flash')
+  const [model, setModel] = useState('gemini-3.5-flash')
   const [teamName, setTeamName] = useState('Team GMS')
   const [mentionTag, setMentionTag] = useState('@channel')
   const [hasApiKey, setHasApiKey] = useState(false)
@@ -20,7 +20,7 @@ export function ReleaseAiSettingsModal({ isOpen, onClose, onSaved }) {
           if (cfg) {
             setProvider(cfg.provider || 'gemini')
             const targetModel = cfg.model === 'gemini-2.5-flash' || !cfg.model
-              ? (cfg.provider === 'gemini' ? 'gemini-3.8-flash' : 'gpt-4o-mini')
+              ? (cfg.provider === 'gemini' ? 'gemini-3.5-flash' : 'gpt-4o-mini')
               : cfg.model
             setModel(targetModel)
             setTeamName(cfg.teamName || 'Team GMS')
@@ -39,7 +39,7 @@ export function ReleaseAiSettingsModal({ isOpen, onClose, onSaved }) {
   const handleProviderChange = (newProvider) => {
     setProvider(newProvider)
     if (newProvider === 'gemini') {
-      setModel('gemini-3.8-flash')
+      setModel('gemini-3.5-flash')
     } else if (newProvider === 'deepseek') {
       setModel('deepseek-chat')
     } else {
@@ -152,14 +152,42 @@ export function ReleaseAiSettingsModal({ isOpen, onClose, onSaved }) {
 
           {/* Model selection */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              Model
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                Model
+              </label>
+              {provider === 'gemini' && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setModel('gemini-3.5-flash')}
+                    className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                      model === 'gemini-3.5-flash'
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-semibold'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    }`}
+                  >
+                    gemini-3.5-flash
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModel('gemini-3.5-flash-lite')}
+                    className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                      model === 'gemini-3.5-flash-lite'
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-semibold'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    }`}
+                  >
+                    flash-lite
+                  </button>
+                </div>
+              )}
+            </div>
             <input
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder={provider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini'}
+              placeholder={provider === 'gemini' ? 'gemini-3.5-flash' : 'gpt-4o-mini'}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 text-xs text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
             />
           </div>
